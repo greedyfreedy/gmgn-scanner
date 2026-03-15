@@ -970,93 +970,66 @@ async function fetchAll() {
 }
 
 async function fetchDexscreener() {
-  setStatus('load','Fetching Dexscreener...');
+  setStatus('load','Fetching Solana tokens...');
   try {
-    // Use the token-boosts/trending endpoint + new pairs endpoint in parallel
-    // These return actual trending Solana tokens — not filtered by quote symbol
-    const [trendingRes, newPairsRes] = await Promise.all([
-      fetch('https://api.dexscreener.com/token-boosts/top/v1'),
-      fetch('https://api.dexscreener.com/token-profiles/latest/v1')
-    ]);
+    // These endpoints work from browser without CORS issues
+    const QUERIES = [
+      'https://api.dexscreener.com/latest/dex/search?q=pump&chain=solana',
+      'https://api.dexscreener.com/latest/dex/search?q=meme&chain=solana',
+      'https://api.dexscreener.com/latest/dex/search?q=cat&chain=solana',
+      'https://api.dexscreener.com/latest/dex/search?q=dog&chain=solana',
+      'https://api.dexscreener.com/latest/dex/search?q=pepe&chain=solana',
+    ];
 
+    // Fire all queries in parallel
+    const results = await Promise.allSettled(QUERIES.map(url => fetch(url)));
     let allPairs = [];
 
-    // Parse trending boosted tokens
-    if (trendingRes.ok) {
-      const trendingData = await trendingRes.json();
-      const solanaBoosted = (Array.isArray(trendingData) ? trendingData : [])
-        .filter(t => t.chainId === 'solana' && t.tokenAddress)
-        .slice(0, 20)
-        .map(t => t.tokenAddress);
-
-      // Fetch pair data for each boosted token
-      if (solanaBoosted.length) {
-        const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${solanaBoosted.join(',')}`);
-        if (pairRes.ok) {
-          const pairData = await pairRes.json();
-          allPairs = allPairs.concat(pairData.pairs || []);
-        }
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value.ok) {
+        try {
+          const data = await result.value.json();
+          allPairs = allPairs.concat(data.pairs || []);
+        } catch(e) {}
       }
     }
 
-    // Parse new token profiles (latest launches on Solana)
-    if (newPairsRes.ok) {
-      const profileData = await newPairsRes.json();
-      const solanaNew = (Array.isArray(profileData) ? profileData : [])
-        .filter(t => t.chainId === 'solana' && t.tokenAddress)
-        .slice(0, 20)
-        .map(t => t.tokenAddress);
-
-      if (solanaNew.length) {
-        const pairRes2 = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${solanaNew.join(',')}`);
-        if (pairRes2.ok) {
-          const pairData2 = await pairRes2.json();
-          allPairs = allPairs.concat(pairData2.pairs || []);
-        }
-      }
-    }
-
-    // Fallback: if both endpoints failed or returned nothing, use search
-    if (!allPairs.length) {
-      const fallbackRes = await fetch('https://api.dexscreener.com/latest/dex/search?q=solana&chain=solana');
-      if (fallbackRes.ok) {
-        const fb = await fallbackRes.json();
-        allPairs = fb.pairs || [];
-      }
-    }
-
-    // Deduplicate by base token address, filter to Solana only
+    // Deduplicate by base token CA
     const seenCA = new Set();
+    const SKIP_SYMBOLS = new Set(['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD','BONK','WIF','JUP','PYTH','JTO']);
+
     const pairs = allPairs
       .filter(p => {
-        if (!p || p.chainId !== 'solana' || !p.baseToken?.address) return false;
+        if (!p || p.chainId !== 'solana') return false;
+        if (!p.baseToken?.address || !p.baseToken?.symbol) return false;
         if (seenCA.has(p.baseToken.address)) return false;
-        // Exclude stablecoins, wrapped SOL, and known non-meme tokens
         const sym = (p.baseToken.symbol || '').toUpperCase();
-        if (['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD'].includes(sym)) return false;
+        if (SKIP_SYMBOLS.has(sym)) return false;
+        // must have some volume
+        if ((p.volume?.h24 || 0) < 500) return false;
         seenCA.add(p.baseToken.address);
         return true;
       })
-      .sort((a,b) => (b.volume?.h24||0) - (a.volume?.h24||0))
+      .sort((a, b) => (b.volume?.h1 || 0) - (a.volume?.h1 || 0))
       .slice(0, 40);
 
-    if (!pairs.length) throw new Error('No Solana token pairs returned — check network');
+    if (!pairs.length) throw new Error('No pairs returned — check your internet connection');
 
-    tokens = pairs.map(p=>({
-      name:     (p.baseToken.symbol||'???').slice(0,12),
-      fullName: (p.baseToken.name||'').slice(0,20),
-      ca:        p.baseToken.address||'',
-      pairAddr:  p.pairAddress||'',
-      mcap:      p.fdv||p.marketCap||0,
-      price:     parseFloat(p.priceUsd)||0,
-      priceChange1h:  p.priceChange?.h1||0,
-      priceChange6h:  p.priceChange?.h6||0,
-      priceChange24h: p.priceChange?.h24||0,
-      volumeH1:  p.volume?.h1||0,
-      volumeH6:  p.volume?.h6||0,
-      liquidity: p.liquidity?.usd||0,
-      createdAt: p.pairCreatedAt||null,
-      url:       p.url||('https://dexscreener.com/solana/'+(p.pairAddress||''))
+    tokens = pairs.map(p => ({
+      name:          (p.baseToken.symbol || '???').slice(0, 12),
+      fullName:      (p.baseToken.name   || '').slice(0, 20),
+      ca:             p.baseToken.address || '',
+      pairAddr:       p.pairAddress || '',
+      mcap:           p.fdv || p.marketCap || 0,
+      price:          parseFloat(p.priceUsd) || 0,
+      priceChange1h:  p.priceChange?.h1  || 0,
+      priceChange6h:  p.priceChange?.h6  || 0,
+      priceChange24h: p.priceChange?.h24 || 0,
+      volumeH1:       p.volume?.h1  || 0,
+      volumeH6:       p.volume?.h6  || 0,
+      liquidity:      p.liquidity?.usd || 0,
+      createdAt:      p.pairCreatedAt || null,
+      url:            p.url || ('https://dexscreener.com/solana/' + (p.pairAddress || ''))
     }));
     tokens.forEach(t=>{
       const s=getCompositeScore(t);
@@ -1077,9 +1050,12 @@ async function fetchDexscreener() {
   } catch(e) {
     setStatus('err','Dexscreener error: '+e.message);
     if (firstLoad) document.getElementById('mainTable').innerHTML=`<tr><td colspan="13"><div class="loading-overlay">
-      <span style="color:var(--red-l)">Cannot connect to Dexscreener API.</span>
-      <span style="color:var(--text2);font-size:12px;max-width:420px;text-align:center">Open this file via a hosted URL (GitHub Pages, Netlify) — browsers block API calls from local files.</span>
-      <button class="btn" onclick="fetchAll()" style="margin-top:6px">Retry</button>
+      <span style="color:var(--red-l);font-size:13px">Could not fetch tokens.</span>
+      <span style="color:var(--text2);font-size:12px;max-width:440px;text-align:center;line-height:1.7">
+        Make sure the dashboard is hosted on <b>GitHub Pages or Netlify</b> — not opened as a local file.<br>
+        Local files (file://) are blocked from making API calls by the browser.
+      </span>
+      <button class="btn" onclick="fetchAll()" style="margin-top:8px">Retry</button>
     </div></td></tr>`;
   }
 }
