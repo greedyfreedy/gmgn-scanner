@@ -886,13 +886,76 @@ async function fetchAll() {
 async function fetchDexscreener() {
   setStatus('load','Fetching Dexscreener...');
   try {
-    const res = await fetch('https://api.dexscreener.com/latest/dex/search?q=SOL&rankBy=trendingScoreH6&order=desc&chain=solana');
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    const pairs = (data.pairs||[])
-      .filter(p=>p.chainId==='solana'&&p.baseToken&&(p.quoteToken?.symbol==='SOL'||p.quoteToken?.symbol==='WSOL'))
-      .slice(0,30);
-    if (!pairs.length) throw new Error('No pairs');
+    // Use the token-boosts/trending endpoint + new pairs endpoint in parallel
+    // These return actual trending Solana tokens — not filtered by quote symbol
+    const [trendingRes, newPairsRes] = await Promise.all([
+      fetch('https://api.dexscreener.com/token-boosts/top/v1'),
+      fetch('https://api.dexscreener.com/token-profiles/latest/v1')
+    ]);
+
+    let allPairs = [];
+
+    // Parse trending boosted tokens
+    if (trendingRes.ok) {
+      const trendingData = await trendingRes.json();
+      const solanaBoosted = (Array.isArray(trendingData) ? trendingData : [])
+        .filter(t => t.chainId === 'solana' && t.tokenAddress)
+        .slice(0, 20)
+        .map(t => t.tokenAddress);
+
+      // Fetch pair data for each boosted token
+      if (solanaBoosted.length) {
+        const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${solanaBoosted.join(',')}`);
+        if (pairRes.ok) {
+          const pairData = await pairRes.json();
+          allPairs = allPairs.concat(pairData.pairs || []);
+        }
+      }
+    }
+
+    // Parse new token profiles (latest launches on Solana)
+    if (newPairsRes.ok) {
+      const profileData = await newPairsRes.json();
+      const solanaNew = (Array.isArray(profileData) ? profileData : [])
+        .filter(t => t.chainId === 'solana' && t.tokenAddress)
+        .slice(0, 20)
+        .map(t => t.tokenAddress);
+
+      if (solanaNew.length) {
+        const pairRes2 = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${solanaNew.join(',')}`);
+        if (pairRes2.ok) {
+          const pairData2 = await pairRes2.json();
+          allPairs = allPairs.concat(pairData2.pairs || []);
+        }
+      }
+    }
+
+    // Fallback: if both endpoints failed or returned nothing, use search
+    if (!allPairs.length) {
+      const fallbackRes = await fetch('https://api.dexscreener.com/latest/dex/search?q=solana&chain=solana');
+      if (fallbackRes.ok) {
+        const fb = await fallbackRes.json();
+        allPairs = fb.pairs || [];
+      }
+    }
+
+    // Deduplicate by base token address, filter to Solana only
+    const seenCA = new Set();
+    const pairs = allPairs
+      .filter(p => {
+        if (!p || p.chainId !== 'solana' || !p.baseToken?.address) return false;
+        if (seenCA.has(p.baseToken.address)) return false;
+        // Exclude stablecoins, wrapped SOL, and known non-meme tokens
+        const sym = (p.baseToken.symbol || '').toUpperCase();
+        if (['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD'].includes(sym)) return false;
+        seenCA.add(p.baseToken.address);
+        return true;
+      })
+      .sort((a,b) => (b.volume?.h24||0) - (a.volume?.h24||0))
+      .slice(0, 40);
+
+    if (!pairs.length) throw new Error('No Solana token pairs returned — check network');
+
     tokens = pairs.map(p=>({
       name:     (p.baseToken.symbol||'???').slice(0,12),
       fullName: (p.baseToken.name||'').slice(0,20),
@@ -922,7 +985,7 @@ async function fetchDexscreener() {
       prevSignals[t.ca]=newSig;
     });
     checkPriceAlerts();
-    setStatus('ok',tokens.length+' tokens loaded');
+    setStatus('ok', tokens.length + ' Solana tokens loaded · trending + new launches');
     document.getElementById('lastUpdate').textContent='Updated '+timeNow();
     firstLoad=false;
   } catch(e) {
