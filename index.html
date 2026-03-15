@@ -996,31 +996,38 @@ async function fetchAll() {
 async function fetchDexscreener() {
   setStatus('load','Fetching Solana tokens...');
   try {
+    // Primary: trending Solana pairs
     const res = await fetch('https://api.dexscreener.com/latest/dex/search?q=SOL&rankBy=trendingScoreH6&order=desc&chain=solana');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
 
-    const seenCA = new Set();
-    const SKIP = new Set(['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD']);
+    console.log('Dexscreener raw response:', data);
 
-    const pairs = (data.pairs || [])
+    const allPairs = data.pairs || [];
+    console.log('Total pairs from API:', allPairs.length);
+
+    const seenCA = new Set();
+    const SKIP = new Set(['USDC','USDT','WSOL','WBTC','WETH','DAI','BUSD']);
+
+    const pairs = allPairs
       .filter(p => {
-        if (!p || p.chainId !== 'solana') return false;
-        if (!p.baseToken?.address) return false;
+        if (!p || !p.baseToken?.address) return false;
         if (seenCA.has(p.baseToken.address)) return false;
         const sym = (p.baseToken.symbol || '').toUpperCase();
         if (SKIP.has(sym)) return false;
         seenCA.add(p.baseToken.address);
         return true;
       })
-      .slice(0, 40);
+      .slice(0, 50);
 
-    if (!pairs.length) throw new Error('No pairs returned');
+    console.log('Filtered pairs:', pairs.length);
+
+    if (!pairs.length) throw new Error('API returned 0 usable pairs');
 
     tokens = pairs.map(p => ({
-      name:          (p.baseToken.symbol || '???').slice(0, 12),
-      fullName:      (p.baseToken.name   || '').slice(0, 20),
-      ca:             p.baseToken.address || '',
+      name:          (p.baseToken?.symbol || '???').slice(0, 12),
+      fullName:      (p.baseToken?.name   || '').slice(0, 20),
+      ca:             p.baseToken?.address || '',
       pairAddr:       p.pairAddress || '',
       mcap:           p.fdv || p.marketCap || 0,
       price:          parseFloat(p.priceUsd) || 0,
@@ -1033,32 +1040,38 @@ async function fetchDexscreener() {
       createdAt:      p.pairCreatedAt || null,
       url:            p.url || ('https://dexscreener.com/solana/' + (p.pairAddress || ''))
     }));
-    tokens.forEach(t=>{
-      const s=getCompositeScore(t);
-      if (!scoreHistory[t.ca]) scoreHistory[t.ca]=[];
+
+    tokens.forEach(t => {
+      const s = getCompositeScore(t);
+      if (!scoreHistory[t.ca]) scoreHistory[t.ca] = [];
       scoreHistory[t.ca].push(s);
-      if (scoreHistory[t.ca].length>12) scoreHistory[t.ca].shift();
-      const newSig=getSignal(t);
-      if (prevSignals[t.ca]!==undefined && prevSignals[t.ca]!==newSig) {
-        signals.unshift({name:t.name,sig:newSig,prev:prevSignals[t.ca],time:timeNow(),score:s,p1:t.priceChange1h,vs:getVolScore(t)});
-        if (signals.length>12) signals.pop();
+      if (scoreHistory[t.ca].length > 12) scoreHistory[t.ca].shift();
+      const newSig = getSignal(t);
+      if (prevSignals[t.ca] !== undefined && prevSignals[t.ca] !== newSig) {
+        signals.unshift({name:t.name, sig:newSig, prev:prevSignals[t.ca], time:timeNow(), score:s, p1:t.priceChange1h, vs:getVolScore(t)});
+        if (signals.length > 12) signals.pop();
       }
-      prevSignals[t.ca]=newSig;
+      prevSignals[t.ca] = newSig;
     });
+
     checkPriceAlerts();
-    setStatus('ok', tokens.length + ' Solana tokens loaded · trending + new launches');
-    document.getElementById('lastUpdate').textContent='Updated '+timeNow();
-    firstLoad=false;
+    setStatus('ok', tokens.length + ' Solana tokens loaded · trending');
+    document.getElementById('lastUpdate').textContent = 'Updated ' + timeNow();
+    firstLoad = false;
+
   } catch(e) {
-    setStatus('err','Dexscreener error: '+e.message);
-    if (firstLoad) document.getElementById('mainTable').innerHTML=`<tr><td colspan="13"><div class="loading-overlay">
-      <span style="color:var(--red-l);font-size:13px">Could not fetch tokens.</span>
-      <span style="color:var(--text2);font-size:12px;max-width:440px;text-align:center;line-height:1.7">
-        Make sure the dashboard is hosted on <b>GitHub Pages or Netlify</b> — not opened as a local file.<br>
-        Local files (file://) are blocked from making API calls by the browser.
-      </span>
-      <button class="btn" onclick="fetchAll()" style="margin-top:8px">Retry</button>
-    </div></td></tr>`;
+    console.error('Dexscreener fetch error:', e);
+    setStatus('err', 'Error: ' + e.message);
+    document.getElementById('mainTable').innerHTML = `<tr><td colspan="13">
+      <div class="loading-overlay">
+        <span style="color:var(--red-l);font-size:13px">Failed: ${e.message}</span>
+        <span style="color:var(--text2);font-size:12px;text-align:center;max-width:440px;line-height:1.7">
+          Make sure you are on <b>GitHub Pages or Netlify</b> — not a local file.<br>
+          Local files (file://) cannot make API calls.
+        </span>
+        <button class="btn" onclick="fetchAll()" style="margin-top:8px">Retry</button>
+      </div>
+    </td></tr>`;
   }
 }
 
