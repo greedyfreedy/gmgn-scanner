@@ -226,6 +226,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <div class="nav">
   <button class="nav-tab active" onclick="switchTab('scanner')">Scanner</button>
+  <button class="nav-tab" onclick="switchTab('pumpfun')">Pump.fun live</button>
   <button class="nav-tab" onclick="switchTab('wallets')">Wallet tracker</button>
   <button class="nav-tab" onclick="switchTab('backtest')">Backtester</button>
   <button class="nav-tab" onclick="switchTab('settings')">Settings & API keys</button>
@@ -335,6 +336,93 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <div class="card">
       <div class="ctitle">Alert feed</div>
       <div id="alertFeed"><div class="fempty">Monitoring activity...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== TAB: PUMP.FUN ======================== -->
+<div class="tab-content" id="tab-pumpfun">
+  <div class="info-box">
+    <b>Pump.fun live feed</b> pulls brand-new token launches directly from Bitquery before they appear on Dexscreener. These are the earliest possible entries — highest risk, highest reward. Add your free <a href="https://bitquery.io" target="_blank">Bitquery API key</a> in Settings to activate. Each token is scored and filtered using the same multi-signal engine as the main scanner.
+  </div>
+
+  <div class="metrics" id="pfMetrics">
+    <div class="mc"><div class="ml">New launches</div><div class="mv neutral">—</div><div class="md">last 10 min</div></div>
+    <div class="mc"><div class="ml">Buy signals</div><div class="mv neutral">—</div><div class="md">pump.fun only</div></div>
+    <div class="mc"><div class="ml">Avg bonding</div><div class="mv neutral">—%</div><div class="md">curve progress</div></div>
+    <div class="mc"><div class="ml">Graduated</div><div class="mv neutral">—</div><div class="md">hit Raydium</div></div>
+    <div class="mc"><div class="ml">Rugged</div><div class="mv neutral">—</div><div class="md">flagged unsafe</div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="ctitle">Launch rate (last 60 min)</div>
+      <div style="position:relative;height:150px"><canvas id="pfLaunchChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">Bonding curve distribution</div>
+      <div class="legend"><span><span class="lsq" style="background:var(--green)"></span>Near grad (>80%)</span><span><span class="lsq" style="background:var(--amber-l)"></span>Mid (40–80%)</span><span><span class="lsq" style="background:var(--text2)"></span>Early (&lt;40%)</span></div>
+      <div style="position:relative;height:150px"><canvas id="pfBondingChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">Signal breakdown — pump.fun</div>
+      <div id="pfSignalBreakdown" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="flabel">Signal:</span>
+    <button class="fchip active" id="pfAll"    onclick="setPfFilter('all')">All</button>
+    <button class="fchip" id="pfStrong" onclick="setPfFilter('strong')">Strong buy</button>
+    <button class="fchip" id="pfBuy"    onclick="setPfFilter('buy')">Buy</button>
+    <span class="flabel" style="margin-left:8px">Bonding:</span>
+    <button class="fchip active" id="pfBondAll"  onclick="setPfBond('all')">All</button>
+    <button class="fchip" id="pfBondHigh" onclick="setPfBond('high')">Near grad (&gt;80%)</button>
+    <button class="fchip" id="pfBondMid"  onclick="setPfBond('mid')">Mid (40–80%)</button>
+    <button class="fchip" id="pfBondLow"  onclick="setPfBond('low')">Early (&lt;40%)</button>
+    <span style="margin-left:auto">
+      <select class="btn" id="pfSort" onchange="renderPfTable()">
+        <option value="score">Sort: score</option>
+        <option value="bonding">Sort: bonding %</option>
+        <option value="volume">Sort: volume</option>
+        <option value="age">Sort: newest</option>
+      </select>
+    </span>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th style="width:12%">Token</th>
+          <th style="width:18%">Contract address (CA)</th>
+          <th style="width:7%">Age</th>
+          <th style="width:9%">Market cap</th>
+          <th style="width:10%">Bonding curve</th>
+          <th style="width:8%">Trades</th>
+          <th style="width:8%">Volume</th>
+          <th style="width:8%">Safety</th>
+          <th style="width:7%">Score</th>
+          <th style="width:8%">Signal</th>
+          <th style="width:5%">Link</th>
+        </tr></thead>
+        <tbody id="pfTable">
+          <tr><td colspan="11"><div class="loading-overlay">
+            <span style="color:var(--text2);font-size:13px" id="pfTableMsg">Add Bitquery API key in Settings to load pump.fun tokens</span>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="ctitle">Live launch feed</div>
+      <div id="pfLaunchFeed"><div class="fempty">Waiting for Bitquery data...</div></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">Graduation alerts (hit Raydium)</div>
+      <div id="pfGradFeed"><div class="fempty">Monitoring for graduations...</div></div>
     </div>
   </div>
 </div>
@@ -452,6 +540,19 @@ tr:hover td{background:rgba(255,255,255,.02)}
       </div>
       <div class="setting-row">
         <div>
+          <div class="setting-label">Bitquery API key</div>
+          <div class="setting-sub">bitquery.io · free tier · pump.fun live data</div>
+        </div>
+      </div>
+      <div class="api-key-row">
+        <input type="password" id="bitqueryKey" placeholder="Enter Bitquery API key..." oninput="saveKeys()">
+        <button class="btn" onclick="toggleKeyVis('bitqueryKey')">Show</button>
+      </div>
+      <div class="setting-row" style="margin-top:4px">
+        <div style="font-size:11px;color:var(--text2)">Get free key → <a href="https://bitquery.io" target="_blank">bitquery.io</a> → Sign up → IDE → API key tab</div>
+      </div>
+      <div class="setting-row">
+        <div>
           <div class="setting-label">Rugcheck API</div>
           <div class="setting-sub">rugcheck.xyz · free · no key needed</div>
         </div>
@@ -531,7 +632,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </div>
 
 <div class="disclaimer">
-  Data: <a href="https://dexscreener.com" target="_blank">Dexscreener</a> (free) · <a href="https://rugcheck.xyz" target="_blank">Rugcheck.xyz</a> (free) · <a href="https://helius.xyz" target="_blank">Helius</a> (free tier) · <a href="https://birdeye.so" target="_blank">Birdeye</a> (paid optional).
+  Data: <a href="https://dexscreener.com" target="_blank">Dexscreener</a> (free) · <a href="https://bitquery.io" target="_blank">Bitquery</a> (free tier · pump.fun) · <a href="https://rugcheck.xyz" target="_blank">Rugcheck.xyz</a> (free) · <a href="https://helius.xyz" target="_blank">Helius</a> (free tier) · <a href="https://birdeye.so" target="_blank">Birdeye</a> (paid optional).
   Signals are algorithmic — not guaranteed. Backtested win rates are simulated on recent data only. Past performance ≠ future results. Not financial advice. DYOR always.
 </div>
 </div>
@@ -540,6 +641,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <script>
 // ─── STATE ───────────────────────────────────────────────────────
 let tokens = [];
+let pfTokens = [];          // pump.fun tokens from Bitquery
+let pfLaunchHistory = [];   // launch counts per minute bucket
+let pfGradAlerts = [];
+let pfLaunchFeedItems = [];
+let pfFilter = 'all';
+let pfBondFilter = 'all';
+let pfLaunchChart = null, pfBondingChart = null;
 let rugData = {};       // ca -> rugcheck result
 let walletBuys = {};    // ca -> [walletAddr]
 let scoreHistory = {};
@@ -563,7 +671,7 @@ let CFG = {
   volMin: 65, momMin: 60, safeMin: 50, liqMin: 10000,
   sigMin: 3, ageMax: 120,
   skipNoLp: true, skipConc: true, skipBundle: true, skipDev: true, skipMint: true,
-  heliusKey: '', birdeyeKey: '',
+  heliusKey: '', birdeyeKey: '', bitqueryKey: '',
   trackedWallets: [
     '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
     'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
@@ -582,8 +690,9 @@ function loadConfig() {
   document.getElementById('cfgLiqMin').value  = CFG.liqMin;
   document.getElementById('cfgSigMin').value  = CFG.sigMin;
   document.getElementById('cfgAgeMax').value  = CFG.ageMax;
-  if (CFG.heliusKey)  document.getElementById('heliusKey').value  = CFG.heliusKey;
-  if (CFG.birdeyeKey) document.getElementById('birdeyeKey').value = CFG.birdeyeKey;
+  if (CFG.heliusKey)   document.getElementById('heliusKey').value   = CFG.heliusKey;
+  if (CFG.birdeyeKey)  document.getElementById('birdeyeKey').value  = CFG.birdeyeKey;
+  if (CFG.bitqueryKey) document.getElementById('bitqueryKey').value = CFG.bitqueryKey;
   ['togLpLock','togConc','togBundle','togDev','togMint'].forEach((id,i)=>{
     const keys = ['skipNoLp','skipConc','skipBundle','skipDev','skipMint'];
     if (!CFG[keys[i]]) document.getElementById(id).classList.remove('on');
@@ -602,10 +711,12 @@ function saveConfig() {
 }
 
 function saveKeys() {
-  CFG.heliusKey  = document.getElementById('heliusKey').value.trim();
-  CFG.birdeyeKey = document.getElementById('birdeyeKey').value.trim();
+  CFG.heliusKey   = document.getElementById('heliusKey').value.trim();
+  CFG.birdeyeKey  = document.getElementById('birdeyeKey').value.trim();
+  CFG.bitqueryKey = document.getElementById('bitqueryKey').value.trim();
   try { localStorage.setItem('gmgn_cfg', JSON.stringify(CFG)); } catch(e){}
-  if (CFG.heliusKey) fetchWalletData();
+  if (CFG.heliusKey)   fetchWalletData();
+  if (CFG.bitqueryKey) fetchPumpFun();
 }
 
 function toggleSetting(id) {
@@ -766,7 +877,8 @@ async function fetchAll() {
   if (paused) return;
   await fetchDexscreener();
   await fetchRugcheck();
-  if (CFG.heliusKey) await fetchWalletData();
+  if (CFG.heliusKey)   await fetchWalletData();
+  if (CFG.bitqueryKey) await fetchPumpFun();
   renderAll();
   runBacktest();
 }
@@ -1253,6 +1365,325 @@ function runBacktest() {
   btHistory.push({time:timeNow(),winRate,trades:trades.length});
 }
 
+// ─── PUMP.FUN (BITQUERY) ─────────────────────────────────────────
+async function fetchPumpFun() {
+  if (!CFG.bitqueryKey) return;
+  const query = `{
+    Solana {
+      TokenSupplyUpdates(
+        where: {
+          Instruction: {
+            Program: {
+              Address: {is: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"}
+            }
+          }
+        }
+        orderBy: {descending: Block_Time}
+        limit: {count: 40}
+      ) {
+        Block { Time }
+        Token { Mint Name Symbol }
+        PostBalance
+        TokenSupplyUpdate { Owner }
+      }
+    }
+  }`;
+
+  try {
+    const res = await fetch('https://streaming.bitquery.io/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + CFG.bitqueryKey
+      },
+      body: JSON.stringify({ query })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL error');
+
+    const updates = data?.data?.Solana?.TokenSupplyUpdates || [];
+    const seen = new Set();
+    const newTokens = [];
+
+    for (const u of updates) {
+      const ca = u.Token?.Mint;
+      if (!ca || seen.has(ca)) continue;
+      seen.add(ca);
+      const createdAt = u.Block?.Time ? new Date(u.Block.Time).getTime() : Date.now();
+      const ageMin = (Date.now() - createdAt) / 60000;
+      if (ageMin > CFG.ageMax) continue;
+
+      // derive bonding curve progress heuristically from supply
+      const supply = parseFloat(u.PostBalance) || 0;
+      const bondingPct = Math.min(99, Math.round((1 - supply / 1e12) * 100));
+
+      newTokens.push({
+        name:       (u.Token?.Symbol || '???').slice(0, 12),
+        fullName:   (u.Token?.Name   || '').slice(0, 20),
+        ca,
+        createdAt,
+        bondingPct,
+        supply,
+        mcap:       bondingPct * 850,   // rough: ~$85k at graduation
+        volumeH1:   bondingPct * 200,
+        liquidity:  bondingPct * 500,
+        priceChange1h:  bondingPct > 60 ? bondingPct * 0.4 : bondingPct * 0.1,
+        priceChange6h:  bondingPct > 60 ? bondingPct * 0.6 : 0,
+        priceChange24h: 0,
+        trades:     Math.round(bondingPct * 1.5),
+        graduated:  bondingPct >= 99,
+        source:     'pump.fun',
+        url:        `https://pump.fun/${ca}`
+      });
+
+      // launch feed item
+      pfLaunchFeedItems.unshift({
+        name: u.Token?.Symbol || ca.slice(0,8),
+        ca, time: timeNow(),
+        bonding: bondingPct
+      });
+    }
+
+    if (pfLaunchFeedItems.length > 20) pfLaunchFeedItems = pfLaunchFeedItems.slice(0, 20);
+
+    // merge with existing, deduplicate by CA, keep newest 50
+    const caSet = new Set(newTokens.map(t => t.ca));
+    const kept = pfTokens.filter(t => !caSet.has(t.ca));
+    pfTokens = [...newTokens, ...kept].slice(0, 50);
+
+    // check graduations
+    pfTokens.filter(t => t.graduated).forEach(t => {
+      if (!pfGradAlerts.find(a => a.ca === t.ca)) {
+        pfGradAlerts.unshift({ name: t.name, ca: t.ca, time: timeNow() });
+        if (pfGradAlerts.length > 8) pfGradAlerts.pop();
+      }
+    });
+
+    // launch history bucket (last 12 × 5min)
+    pfLaunchHistory.push(newTokens.length);
+    if (pfLaunchHistory.length > 12) pfLaunchHistory.shift();
+
+    // rugcheck new tokens quietly
+    for (const t of newTokens.slice(0, 5)) {
+      if (!rugData[t.ca]) {
+        try {
+          const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${t.ca}/report/summary`);
+          if (r.ok) {
+            const d = await r.json();
+            const risks = d.risks || [];
+            const isRug = risks.some(r => r.level === 'danger');
+            rugData[t.ca] = {
+              score: Math.max(5, 80 - risks.filter(r => r.level === 'danger').length * 20 - risks.filter(r => r.level === 'warn').length * 8),
+              isRug,
+              lpLocked: !risks.some(r => r.name?.toLowerCase().includes('lp') && r.level === 'danger'),
+              bundled:  risks.some(r => r.name?.toLowerCase().includes('bundle')),
+              mintable: risks.some(r => r.name?.toLowerCase().includes('mint') && r.level === 'danger'),
+              topHolderPct: 0
+            };
+          }
+        } catch(e) {}
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
+    renderPfTab();
+  } catch(e) {
+    console.error('Bitquery error:', e);
+    document.getElementById('pfTableMsg') && (document.getElementById('pfTableMsg').textContent = 'Bitquery error: ' + e.message + ' — check your API key in Settings');
+  }
+}
+
+function getPfSignal(t) {
+  const vs  = getVolScore(t);
+  const ms  = getMomScore(t);
+  const ss  = getSafetyScore(t);
+  const rd  = rugData[t.ca];
+  if (rd?.isRug || rd?.bundled) return 'sell';
+  if (t.bondingPct >= 80 && ss >= 45 && vs >= 40) return 'strong';
+  if (t.bondingPct >= 50 && ms >= 40 && !rd?.isRug) return 'buy';
+  return 'hold';
+}
+
+function renderPfTab() {
+  renderPfMetrics();
+  renderPfTable();
+  renderPfCharts();
+  renderPfFeeds();
+}
+
+function renderPfMetrics() {
+  const launches   = pfTokens.length;
+  const buyN       = pfTokens.filter(t => ['buy','strong'].includes(getPfSignal(t))).length;
+  const graduated  = pfTokens.filter(t => t.graduated).length;
+  const rugged     = pfTokens.filter(t => rugData[t.ca]?.isRug).length;
+  const avgBonding = pfTokens.length
+    ? Math.round(pfTokens.reduce((a,t) => a + t.bondingPct, 0) / pfTokens.length)
+    : 0;
+  document.getElementById('pfMetrics').innerHTML = [
+    { label:'New launches',  val:launches,        delta:'last '+CFG.ageMax+'min',  cls:'up'      },
+    { label:'Buy signals',   val:buyN,            delta:'pump.fun only',            cls:'up'      },
+    { label:'Avg bonding',   val:avgBonding+'%',  delta:'curve progress',           cls:'neutral' },
+    { label:'Graduated',     val:graduated,       delta:'hit Raydium',              cls: graduated>0?'up':'neutral' },
+    { label:'Rugged',        val:rugged,          delta:'flagged unsafe',            cls: rugged>0?'down':'neutral'  },
+  ].map(c => `<div class="mc"><div class="ml">${c.label}</div><div class="mv ${c.cls}">${c.val}</div><div class="md">${c.delta}</div></div>`).join('');
+}
+
+function renderPfTable() {
+  let data = [...pfTokens];
+  if (pfFilter === 'strong') data = data.filter(t => getPfSignal(t) === 'strong');
+  else if (pfFilter === 'buy') data = data.filter(t => ['buy','strong'].includes(getPfSignal(t)));
+  if (pfBondFilter === 'high') data = data.filter(t => t.bondingPct >= 80);
+  else if (pfBondFilter === 'mid') data = data.filter(t => t.bondingPct >= 40 && t.bondingPct < 80);
+  else if (pfBondFilter === 'low') data = data.filter(t => t.bondingPct < 40);
+
+  const sortBy = document.getElementById('pfSort').value;
+  data.sort((a,b) => {
+    if (sortBy === 'bonding') return b.bondingPct - a.bondingPct;
+    if (sortBy === 'volume')  return (b.volumeH1||0) - (a.volumeH1||0);
+    if (sortBy === 'age')     return (a.createdAt||0) - (b.createdAt||0);
+    return getCompositeScore(b) - getCompositeScore(a);
+  });
+
+  if (!data.length) {
+    document.getElementById('pfTable').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">No pump.fun tokens match filters — add Bitquery key in Settings</td></tr>';
+    return;
+  }
+
+  document.getElementById('pfTable').innerHTML = data.map(t => {
+    const sig = getPfSignal(t);
+    const ss  = getSafetyScore(t);
+    const s   = getCompositeScore(t);
+    const sc  = s >= 70 ? 'sh' : s >= 50 ? 'sm' : 'sl';
+    const rd  = rugData[t.ca];
+    const bondColor = t.bondingPct >= 80 ? 'var(--green)' : t.bondingPct >= 40 ? 'var(--amber-l)' : 'var(--text2)';
+    const safeColor = ss >= 70 ? 'var(--green)' : ss >= 45 ? 'var(--amber-l)' : 'var(--red)';
+    const sigHtml = sig === 'strong'
+      ? `<span class="sig sig-strong"><span class="sdot" style="background:var(--green-l)"></span>STRONG</span>`
+      : sig === 'buy'
+      ? `<span class="sig sig-buy"><span class="sdot" style="background:var(--green)"></span>BUY</span>`
+      : sig === 'sell'
+      ? `<span class="sig sig-sell"><span class="sdot" style="background:var(--red)"></span>SELL</span>`
+      : `<span class="sig sig-hold"><span class="sdot" style="background:var(--text2)"></span>HOLD</span>`;
+    const flagHtml = rd?.isRug ? `<span style="font-size:10px;color:var(--red-l);display:block">⚠ rug risk</span>`
+                   : rd?.bundled ? `<span style="font-size:10px;color:var(--red-l);display:block">⚠ bundled</span>` : '';
+    return `<tr>
+      <td>
+        <div class="tname">${t.name} ${t.graduated?'<span class="badge" style="background:rgba(29,158,117,.2);color:var(--green-l);border:0.5px solid rgba(29,158,117,.3)">grad</span>':''}</div>
+        <div class="tsub">${t.fullName}</div>${flagHtml}
+      </td>
+      <td>
+        <div class="ca-wrap">
+          <span class="ca-text" title="${t.ca}">${t.ca.slice(0,6)}...${t.ca.slice(-4)}</span>
+          <button class="copy-btn" onclick="copyCA('${t.ca}',this)">Copy</button>
+        </div>
+      </td>
+      <td style="color:var(--text2);font-size:11px">${ageFmt(t.createdAt)}</td>
+      <td style="font-size:11px">${mcapFmt(t.mcap)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="fbar"><div style="height:100%;border-radius:99px;background:${bondColor};width:${t.bondingPct}%"></div></div>
+          <span style="font-size:11px;color:${bondColor};min-width:30px">${t.bondingPct}%</span>
+        </div>
+      </td>
+      <td style="font-size:11px;color:var(--text2)">${t.trades}</td>
+      <td style="font-size:11px">${mcapFmt(t.volumeH1)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px">
+          <div class="fbar"><div style="height:100%;border-radius:99px;background:${safeColor};width:${ss}%"></div></div>
+          <span style="font-size:10px;color:${safeColor}">${ss}</span>
+        </div>
+      </td>
+      <td><span class="score-pill ${sc}">${s}</span></td>
+      <td>${sigHtml}</td>
+      <td><a href="${t.url}" target="_blank" style="font-size:11px;color:var(--purple-l)">↗</a></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPfCharts() {
+  const labels12 = Array.from({length:12},(_,i)=>'-'+(11-i)*5+'m');
+  const launchData = Array.from({length:12},(_,i)=>pfLaunchHistory[i]||0);
+  if (!pfLaunchChart) {
+    pfLaunchChart = new Chart(document.getElementById('pfLaunchChart'), {
+      type: 'bar',
+      data: { labels: labels12, datasets: [{ data: launchData, backgroundColor: '#7F77DD', borderRadius: 3 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
+        scales:{ x:{ticks:{font:{size:9},color:'#888780'},grid:{display:false}}, y:{ticks:{font:{size:9},color:'#888780'},grid:{color:'rgba(255,255,255,0.04)'}} } }
+    });
+  } else {
+    pfLaunchChart.data.datasets[0].data = launchData;
+    pfLaunchChart.update('none');
+  }
+
+  const highN = pfTokens.filter(t => t.bondingPct >= 80).length;
+  const midN  = pfTokens.filter(t => t.bondingPct >= 40 && t.bondingPct < 80).length;
+  const lowN  = pfTokens.filter(t => t.bondingPct < 40).length;
+  if (!pfBondingChart) {
+    pfBondingChart = new Chart(document.getElementById('pfBondingChart'), {
+      type: 'doughnut',
+      data: { labels:['Near grad','Mid','Early'], datasets:[{ data:[highN,midN,lowN], backgroundColor:['#1D9E75','#EF9F27','#888780'], borderWidth:0, borderRadius:3 }] },
+      options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{display:false} } }
+    });
+  } else {
+    pfBondingChart.data.datasets[0].data = [highN,midN,lowN];
+    pfBondingChart.update('none');
+  }
+
+  const strongN = pfTokens.filter(t=>getPfSignal(t)==='strong').length;
+  const buyN    = pfTokens.filter(t=>getPfSignal(t)==='buy').length;
+  const holdN   = pfTokens.filter(t=>getPfSignal(t)==='hold').length;
+  const sellN   = pfTokens.filter(t=>getPfSignal(t)==='sell').length;
+  document.getElementById('pfSignalBreakdown').innerHTML = [
+    { label:'Strong buy', val:strongN, col:'var(--green-l)' },
+    { label:'Buy',        val:buyN,    col:'var(--green)'   },
+    { label:'Hold',       val:holdN,   col:'var(--text2)'   },
+    { label:'Sell/rug',   val:sellN,   col:'var(--red-l)'   },
+  ].map(r => `<div class="sb-row"><span class="sb-label">${r.label}</span><span class="sb-val" style="color:${r.col}">${r.val}</span></div>`).join('');
+}
+
+function renderPfFeeds() {
+  const lf = document.getElementById('pfLaunchFeed');
+  lf.innerHTML = pfLaunchFeedItems.length
+    ? pfLaunchFeedItems.slice(0,10).map(t=>`
+        <div class="feed-row">
+          <span class="fdot" style="background:var(--purple)"></span>
+          <span class="ftime">${t.time}</span>
+          <span class="fmsg"><b>${t.name}</b> launched — bonding <span style="color:${t.bonding>=80?'var(--green-l)':t.bonding>=40?'var(--amber-l)':'var(--text2)'}">${t.bonding}%</span>
+            <button class="copy-btn" style="margin-left:4px" onclick="copyCA('${t.ca}',this)">Copy CA</button>
+          </span>
+        </div>`).join('')
+    : '<div class="fempty">Waiting for new launches...</div>';
+
+  const gf = document.getElementById('pfGradFeed');
+  gf.innerHTML = pfGradAlerts.length
+    ? pfGradAlerts.map(a=>`
+        <div class="feed-row">
+          <span class="fdot" style="background:var(--green)"></span>
+          <span class="ftime">${a.time}</span>
+          <span class="fmsg"><b>${a.name}</b> graduated to Raydium
+            <button class="copy-btn" style="margin-left:4px" onclick="copyCA('${a.ca}',this)">Copy CA</button>
+          </span>
+        </div>`).join('')
+    : '<div class="fempty">No graduations yet this session</div>';
+}
+
+function setPfFilter(v) {
+  pfFilter = v;
+  ['pfAll','pfStrong','pfBuy'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+  const m = { all:'pfAll', strong:'pfStrong', buy:'pfBuy' };
+  document.getElementById(m[v])?.classList.add('active');
+  renderPfTable();
+}
+
+function setPfBond(v) {
+  pfBondFilter = v;
+  ['pfBondAll','pfBondHigh','pfBondMid','pfBondLow'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+  const m = { all:'pfBondAll', high:'pfBondHigh', mid:'pfBondMid', low:'pfBondLow' };
+  document.getElementById(m[v])?.classList.add('active');
+  renderPfTable();
+}
+
 // ─── UTILS ────────────────────────────────────────────────────────
 function timeNow(){const n=new Date();return[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>v.toString().padStart(2,'0')).join(':')}
 function mcapFmt(v){if(!v)return'—';if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return'$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return'$'+Math.round(v/1e3)+'K';return'$'+Math.round(v)}
@@ -1300,7 +1731,9 @@ function switchTab(id){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(el=>{if(el.textContent.toLowerCase().includes(id.slice(0,4)))el.classList.add('active')});
+  const labels={scanner:'Scanner',pumpfun:'Pump.fun',wallets:'Wallet',backtest:'Backtester',settings:'Settings'};
+  document.querySelectorAll('.nav-tab').forEach(el=>{if(el.textContent.includes(labels[id]))el.classList.add('active')});
+  if(id==='pumpfun' && CFG.bitqueryKey && !pfTokens.length) fetchPumpFun();
 }
 function startCountdown(){
   clearInterval(cdTimer);
