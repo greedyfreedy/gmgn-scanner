@@ -273,11 +273,12 @@ tr:hover td{background:rgba(255,255,255,.02)}
   </div>
 
   <div class="filters">
-    <span class="flabel">Signal:</span>
-    <button class="fchip active" id="fAll" onclick="setFilter('all')">All</button>
+    <span class="flabel">View:</span>
+    <button class="fchip active" id="fAll"    onclick="setFilter('all')">High conf only</button>
     <button class="fchip" id="fStrong" onclick="setFilter('strong')">Strong buy</button>
-    <button class="fchip" id="fBuy" onclick="setFilter('buy')">Buy</button>
-    <button class="fchip" id="fSell" onclick="setFilter('sell')">Sell</button>
+    <button class="fchip" id="fBuy"    onclick="setFilter('buy')">Buy</button>
+    <button class="fchip" id="fSell"   onclick="setFilter('sell')">Sell</button>
+    <button class="fchip" id="fAllRaw" onclick="setFilter('all_raw')">Show all</button>
     <span class="flabel" style="margin-left:6px">Min score:</span>
     <button class="fchip active" id="fs0"  onclick="setScoreFilter(0)">All</button>
     <button class="fchip" id="fs60" onclick="setScoreFilter(60)">60+</button>
@@ -668,8 +669,12 @@ let firstLoad = true;
 
 // ─── CONFIG (saved to localStorage) ──────────────────────────────
 let CFG = {
-  volMin: 65, momMin: 60, safeMin: 50, liqMin: 10000,
-  sigMin: 3, ageMax: 120,
+  volMin: 75,   // was 65 — require strong volume surge
+  momMin: 70,   // was 60 — require confirmed momentum
+  safeMin: 65,  // was 50 — require solid safety score
+  liqMin: 25000,// was 10000 — require real liquidity
+  sigMin: 4,    // was 3 — require 4/6 signals for STRONG BUY
+  ageMax: 90,   // was 120 — new launches only (max 90 min old)
   skipNoLp: true, skipConc: true, skipBundle: true, skipDev: true, skipMint: true,
   heliusKey: '', birdeyeKey: '', bitqueryKey: '',
   trackedWallets: [
@@ -758,44 +763,88 @@ function removeWallet(i) {
 }
 
 // ─── SCORING ─────────────────────────────────────────────────────
+// High-confidence mode: every score is penalised harder for weak signals
+
 function getVolScore(t) {
   const ratio = (t.volumeH1||0) / (t.mcap||1);
-  if (ratio > 0.5)  return 97;
-  if (ratio > 0.2)  return Math.round(75 + ratio*55);
-  if (ratio > 0.05) return Math.round(45 + ratio*300);
-  if (ratio > 0.01) return Math.round(22 + ratio*1000);
-  return Math.max(5, Math.round(ratio*2000));
+  // also reward volume acceleration: h1 vol vs h6/6 average
+  const h6avg = (t.volumeH6||0) / 6;
+  const accel = h6avg > 0 ? (t.volumeH1||0) / h6avg : 1;
+  let base;
+  if (ratio > 0.5)  base = 97;
+  else if (ratio > 0.3) base = Math.round(85 + ratio * 40);
+  else if (ratio > 0.1) base = Math.round(65 + ratio * 100);
+  else if (ratio > 0.05) base = Math.round(45 + ratio * 200);
+  else if (ratio > 0.01) base = Math.round(22 + ratio * 460);
+  else base = Math.max(5, Math.round(ratio * 2000));
+  // boost up to +8 if volume is accelerating vs 6h average
+  const accelBonus = accel > 2 ? 8 : accel > 1.5 ? 5 : accel > 1.2 ? 2 : 0;
+  return Math.min(99, base + accelBonus);
 }
 
 function getMomScore(t) {
-  const w = (t.priceChange1h||0)*0.5 + (t.priceChange6h||0)*0.3 + (t.priceChange24h||0)*0.2;
-  if (w > 100) return 99;
-  if (w > 50)  return Math.round(85+w*0.07);
-  if (w > 20)  return Math.round(65+w*0.5);
-  if (w > 5)   return Math.round(50+w*1.5);
-  if (w > 0)   return Math.round(40+w*2);
-  if (w > -10) return Math.round(30+w);
-  return Math.max(5, Math.round(20+w*0.5));
+  const p1  = t.priceChange1h  || 0;
+  const p6  = t.priceChange6h  || 0;
+  const p24 = t.priceChange24h || 0;
+  // high-confidence: weight 1h most heavily, penalise if 6h is already too pumped (late entry)
+  const w = p1 * 0.55 + p6 * 0.30 + p24 * 0.15;
+  // penalise parabolic moves (already >300% = likely blow-off top)
+  const latePenalty = p1 > 300 ? -25 : p1 > 200 ? -15 : p1 > 150 ? -8 : 0;
+  // penalise if 6h pump is huge but 1h is flattening (momentum exhaustion)
+  const exhaustion = p6 > 200 && p1 < 10 ? -20 : 0;
+  let base;
+  if (w > 100) base = 99;
+  else if (w > 60) base = Math.round(88 + w * 0.05);
+  else if (w > 30) base = Math.round(72 + w * 0.4);
+  else if (w > 10) base = Math.round(57 + w * 0.75);
+  else if (w > 3)  base = Math.round(45 + w * 2);
+  else if (w > 0)  base = Math.round(35 + w * 3);
+  else if (w > -10) base = Math.round(25 + w);
+  else base = Math.max(5, Math.round(15 + w * 0.5));
+  return Math.max(5, Math.min(99, base + latePenalty + exhaustion));
 }
 
 function getLiqScore(t) {
-  const l = t.liquidity||0;
-  if (l>500000) return 92; if (l>100000) return 76; if (l>50000) return 62;
-  if (l>10000)  return 46; if (l>2000)   return 30; return 14;
+  const l = t.liquidity || 0;
+  // higher minimums — shallow liquidity = easy manipulation
+  if (l > 500000) return 95;
+  if (l > 200000) return 85;
+  if (l > 100000) return 76;
+  if (l > 50000)  return 65;
+  if (l > 25000)  return 52;
+  if (l > 10000)  return 38;
+  if (l > 5000)   return 24;
+  return 10; // below $5k liq — ignore
 }
 
 function getSafetyScore(t) {
   const rd = rugData[t.ca];
   if (rd) return rd.score;
-  // fallback heuristic
-  let s = 50;
-  const liq = t.liquidity||0;
-  if (liq > 50000) s += 15;
-  else if (liq < 5000) s -= 20;
-  const age = t.createdAt ? (Date.now()-t.createdAt)/60000 : 0;
-  if (age > 60) s += 10;
-  if ((t.priceChange1h||0) > 200) s -= 20;
-  return Math.max(5, Math.min(95, s));
+  // heuristic fallback — pessimistic by default (assume unsafe until proven)
+  let s = 40; // start lower than before
+  const liq = t.liquidity || 0;
+  if (liq > 100000) s += 20;
+  else if (liq > 50000) s += 12;
+  else if (liq < 5000)  s -= 25;
+  const age = t.createdAt ? (Date.now() - t.createdAt) / 60000 : 0;
+  if (age > 60)  s += 12; // survived 1h = good sign
+  if (age > 120) s += 8;  // survived 2h = better
+  if (age < 5)   s -= 15; // brand new = risky
+  const p1 = t.priceChange1h || 0;
+  if (p1 > 500)  s -= 25; // 500%+ in 1h = likely manipulation
+  if (p1 > 200)  s -= 12;
+  const volRatio = (t.volumeH1||0) / (t.mcap||1);
+  if (volRatio > 3) s -= 15; // vol >> mcap = wash trading likely
+  return Math.max(5, Math.min(90, s));
+}
+
+function getVolatilityRisk(t) {
+  // returns 'high' | 'medium' | 'low' — used to warn on entry
+  const p1 = Math.abs(t.priceChange1h || 0);
+  const p6 = Math.abs(t.priceChange6h || 0);
+  if (p1 > 150 || p6 > 400) return 'high';
+  if (p1 > 50  || p6 > 150) return 'medium';
+  return 'low';
 }
 
 function countSignals(t) {
@@ -803,73 +852,110 @@ function countSignals(t) {
   const ms = getMomScore(t);
   const ls = getLiqScore(t);
   const ss = getSafetyScore(t);
-  const p1 = t.priceChange1h||0;
-  const p6 = t.priceChange6h||0;
+  const p1 = t.priceChange1h || 0;
+  const p6 = t.priceChange6h || 0;
   const rd = rugData[t.ca];
+  const wBuys = (walletBuys[t.ca] || []).length;
+  const ageMin = t.createdAt ? (Date.now() - t.createdAt) / 60000 : 9999;
 
   let count = 0;
   const details = [];
 
-  if (vs >= CFG.volMin)               { count++; details.push({label:'Volume surge', ok:true}); }
-  else                                         details.push({label:'Volume surge', ok:false});
-  if (ms >= CFG.momMin)               { count++; details.push({label:'Momentum', ok:true}); }
-  else                                         details.push({label:'Momentum', ok:false});
-  if (ss >= CFG.safeMin)              { count++; details.push({label:'Safety ok', ok:true}); }
-  else                                         details.push({label:'Safety ok', ok:false});
-  if (ls >= 46)                        { count++; details.push({label:'Liquidity ok', ok:true}); }
-  else                                         details.push({label:'Liquidity ok', ok:false});
-  const wBuys = (walletBuys[t.ca]||[]).length;
-  if (wBuys >= 2)                     { count++; details.push({label:'Smart wallets', ok:true}); }
-  else                                         details.push({label:'Smart wallets', ok:false});
-  if (rd && rd.lpLocked)               { count++; details.push({label:'LP locked', ok:true}); }
-  else if (rd && !rd.lpLocked)                 details.push({label:'LP locked', ok:false});
+  // 1. Volume surge — must be strong AND accelerating
+  if (vs >= CFG.volMin) { count++; details.push({label:'Volume surge', ok:true}); }
+  else details.push({label:'Volume surge', ok:false});
 
-  return { count, details };
+  // 2. Momentum — confirmed price action, not exhausted
+  if (ms >= CFG.momMin && p1 > 5 && p1 < 400) { count++; details.push({label:'Momentum', ok:true}); }
+  else details.push({label:'Momentum', ok:false});
+
+  // 3. Safety — must pass rugcheck or strong heuristic
+  if (ss >= CFG.safeMin) { count++; details.push({label:'Safety ok', ok:true}); }
+  else details.push({label:'Safety ok', ok:false});
+
+  // 4. Liquidity — real depth required
+  if (ls >= 52 && (t.liquidity||0) >= CFG.liqMin) { count++; details.push({label:'Liquidity ok', ok:true}); }
+  else details.push({label:'Liquidity ok', ok:false});
+
+  // 5. Smart wallets buying
+  if (wBuys >= 2) { count++; details.push({label:'Smart wallets', ok:true}); }
+  else details.push({label:'Smart wallets', ok:false});
+
+  // 6. LP locked (from rugcheck)
+  if (rd && rd.lpLocked && !rd.bundled && !rd.mintable) { count++; details.push({label:'LP locked + clean', ok:true}); }
+  else if (rd) details.push({label:'LP locked + clean', ok:false});
+
+  // 7. Age sweet spot: 10–90 min (not brand new, not old)
+  if (ageMin >= 10 && ageMin <= CFG.ageMax) { count++; details.push({label:'Age sweet spot', ok:true}); }
+  else details.push({label:'Age sweet spot', ok:false});
+
+  // 8. Volume/mcap not suspicious (not wash trading)
+  const vr = (t.volumeH1||0) / (t.mcap||1);
+  if (vr < 3 && vr > 0.05) { count++; details.push({label:'Vol/mcap healthy', ok:true}); }
+  else details.push({label:'Vol/mcap healthy', ok:false});
+
+  return { count, details, maxSignals: 8 };
 }
 
 function getSignal(t) {
   const { count } = countSignals(t);
-  const p1 = t.priceChange1h||0;
-  const p6 = t.priceChange6h||0;
+  const p1 = t.priceChange1h  || 0;
+  const p6 = t.priceChange6h  || 0;
   const vs = getVolScore(t);
   const ms = getMomScore(t);
   const ss = getSafetyScore(t);
+  const ls = getLiqScore(t);
   const rd = rugData[t.ca];
+  const liq = t.liquidity || 0;
 
-  // hard sells
-  if (p6 < -25) return 'sell';
-  if (p1 < -10 && p6 < -15) return 'sell';
-  if (p1 < -5 && vs < 20 && ms < 25) return 'sell';
-  if (rd && rd.isRug) return 'sell';
+  // ── HARD SELL / AVOID ──────────────────────────────────────────
+  if (rd && rd.isRug)                          return 'sell'; // confirmed rug
+  if (rd && rd.bundled)                        return 'sell'; // fake launch
+  if (p6 < -30)                                return 'sell'; // dumping hard
+  if (p1 < -15 && p6 < -20)                   return 'sell'; // accelerating down
+  if (p1 < -8 && vs < 20 && ms < 20)          return 'sell'; // dead + falling
+  if (liq < 3000)                              return 'sell'; // no liquidity = trap
+  if (p1 > 500)                                return 'sell'; // parabolic blow-off
+  if (ss < 25)                                 return 'sell'; // unsafe
 
-  // strong buy: multiple signals aligned
-  if (count >= CFG.sigMin && ss >= CFG.safeMin) return 'strong';
+  // ── STRONG BUY — high confidence gate ─────────────────────────
+  // Requires: 4+ signals out of 8 AND all 3 core criteria AND no flags
+  const coreOk = vs >= CFG.volMin && ms >= CFG.momMin && ss >= CFG.safeMin;
+  const liqOk  = liq >= CFG.liqMin && ls >= 52;
+  const notFlag= !isFlagged(t);
+  const priceOk= p1 > 5 && p1 < 300 && p6 > 0; // moving up, not parabolic
+  if (count >= CFG.sigMin && coreOk && liqOk && notFlag && priceOk) return 'strong';
 
-  // regular buy
-  if (vs >= CFG.volMin && ms >= CFG.momMin && p1 > 5) return 'buy';
-  if (vs >= 80 && p1 > 5 && (t.liquidity||0) > CFG.liqMin) return 'buy';
+  // ── BUY — good setup but not all boxes ticked ─────────────────
+  if (vs >= CFG.volMin && ms >= CFG.momMin && p1 > 8 && ss >= 50 && liqOk) return 'buy';
+  if (vs >= 80 && p1 > 10 && ss >= 55 && liq > CFG.liqMin)                 return 'buy';
+  if (count >= 3 && coreOk && p1 > 5)                                       return 'buy';
 
   return 'hold';
 }
 
 function isFlagged(t) {
   const rd = rugData[t.ca];
-  if (CFG.skipNoLp && rd && !rd.lpLocked) return 'LP not locked';
-  if (CFG.skipConc && rd && rd.topHolderPct > 60) return 'Concentration risk';
-  if (CFG.skipBundle && rd && rd.bundled) return 'Bundle detected';
-  if (CFG.skipMint && rd && rd.mintable) return 'Mintable supply';
+  if (CFG.skipNoLp  && rd && !rd.lpLocked)         return 'LP not locked';
+  if (CFG.skipConc  && rd && rd.topHolderPct > 60)  return 'Concentration risk';
+  if (CFG.skipBundle&& rd && rd.bundled)             return 'Bundle detected';
+  if (CFG.skipMint  && rd && rd.mintable)            return 'Mintable supply';
+  // extra high-confidence hard blocks
+  if ((t.liquidity||0) < 3000)                       return 'Liquidity too low';
+  if ((t.priceChange1h||0) > 500)                    return 'Parabolic — late entry';
   return null;
 }
 
 function getCompositeScore(t) {
-  const wv=parseInt(document.getElementById('wVol')?.value||30);
+  const wv=parseInt(document.getElementById('wVol')?.value||35);
   const wm=parseInt(document.getElementById('wMom')?.value||30);
   const ws=parseInt(document.getElementById('wSafe')?.value||25);
-  const wl=parseInt(document.getElementById('wLiq')?.value||15);
+  const wl=parseInt(document.getElementById('wLiq')?.value||10);
   const total = wv+wm+ws+wl||1;
-  return Math.min(99, Math.round(
-    (getVolScore(t)*wv + getMomScore(t)*wm + getSafetyScore(t)*ws + getLiqScore(t)*wl) / total
-  ));
+  const raw = (getVolScore(t)*wv + getMomScore(t)*wm + getSafetyScore(t)*ws + getLiqScore(t)*wl) / total;
+  // penalise if flagged
+  const flagPenalty = isFlagged(t) ? 15 : 0;
+  return Math.max(0, Math.min(99, Math.round(raw - flagPenalty)));
 }
 
 // ─── FETCH DATA ───────────────────────────────────────────────────
@@ -1125,19 +1211,21 @@ function renderWalletTab(recentBuys=[], devActivity=[]) {
 // ─── RENDER ───────────────────────────────────────────────────────
 function renderMetrics() {
   if (!tokens.length) return;
-  const strongN = tokens.filter(t=>getSignal(t)==='strong').length;
-  const buyN    = tokens.filter(t=>getSignal(t)==='buy').length;
-  const sellN   = tokens.filter(t=>getSignal(t)==='sell').length;
-  const rugN    = Object.values(rugData).filter(r=>r.isRug||r.bundled).length;
-  // estimate win rate from signal count distribution
-  const trades  = tokens.filter(t=>['strong','buy'].includes(getSignal(t)));
-  const winEst  = trades.length ? Math.round(50 + (strongN/Math.max(1,trades.length))*30 + Math.min(10, rugN===0?5:0)) : 0;
+  const strongN  = tokens.filter(t=>getSignal(t)==='strong').length;
+  const buyN     = tokens.filter(t=>getSignal(t)==='buy').length;
+  const sellN    = tokens.filter(t=>getSignal(t)==='sell').length;
+  const rugN     = Object.values(rugData).filter(r=>r.isRug||r.bundled).length;
+  const highConf = tokens.filter(t=>getSignal(t)==='strong'&&getCompositeScore(t)>=75&&!isFlagged(t)).length;
+  // win rate estimate: weighted by signal quality
+  const trades   = tokens.filter(t=>['strong','buy'].includes(getSignal(t))&&!isFlagged(t));
+  const avgSig   = trades.length ? trades.reduce((a,t)=>a+countSignals(t).count,0)/trades.length : 0;
+  const winEst   = trades.length ? Math.min(88, Math.round(45 + avgSig*6 + (strongN/Math.max(1,trades.length))*15 + (rugN===0?5:0))) : 0;
   document.getElementById('metrics').innerHTML = [
-    {label:'Strong buy',  val:strongN, delta:'3+ signals',    cls:'up'},
-    {label:'Buy signals', val:buyN,    delta:'active',        cls:'up'},
-    {label:'Sell signals',val:sellN,   delta:'exit',          cls:'down'},
-    {label:'Rugs flagged',val:rugN,    delta:'avoid',         cls: rugN>0?'down':'neutral'},
-    {label:'Est. win rate',val:winEst+'%',delta:'this session',cls: winEst>=65?'up':winEst>=50?'warn':'down'},
+    {label:'High confidence', val:highConf,     delta:'score 75+ · 4+ signals', cls:'up'},
+    {label:'Strong buy',      val:strongN,      delta:'all signals aligned',     cls:'up'},
+    {label:'Buy signals',     val:buyN,         delta:'good setup',              cls:'neutral'},
+    {label:'Rugs blocked',    val:rugN,         delta:'auto-filtered',           cls: rugN>0?'down':'neutral'},
+    {label:'Est. win rate',   val:winEst+'%',   delta:'high-conf trades only',   cls: winEst>=70?'up':winEst>=55?'warn':'down'},
   ].map(c=>`<div class="mc"><div class="ml">${c.label}</div><div class="mv ${c.cls}">${c.val}</div><div class="md">${c.delta}</div></div>`).join('');
 }
 
@@ -1145,9 +1233,19 @@ function renderTable() {
   if (!tokens.length) return;
   const sortBy = document.getElementById('sortSel').value;
   let data = [...tokens];
-  if (sigFilter==='strong') data=data.filter(t=>getSignal(t)==='strong');
-  else if (sigFilter==='buy') data=data.filter(t=>['buy','strong'].includes(getSignal(t)));
-  else if (sigFilter==='sell') data=data.filter(t=>getSignal(t)==='sell');
+
+  // Default: show strong + buy only, hide rugged/flagged, min score 65
+  if (sigFilter==='all') {
+    data = data.filter(t => ['strong','buy'].includes(getSignal(t)) && getCompositeScore(t) >= 65 && !isFlagged(t));
+  } else if (sigFilter==='strong') {
+    data = data.filter(t => getSignal(t)==='strong' && !isFlagged(t));
+  } else if (sigFilter==='buy') {
+    data = data.filter(t => ['buy','strong'].includes(getSignal(t)));
+  } else if (sigFilter==='sell') {
+    data = data.filter(t => getSignal(t)==='sell');
+  } else if (sigFilter==='all_raw') {
+    // show everything including holds
+  }
   if (scoreFilter>0) data=data.filter(t=>getCompositeScore(t)>=scoreFilter);
   if (safeOnly) data=data.filter(t=>getSafetyScore(t)>=CFG.safeMin&&!isFlagged(t));
   data.sort((a,b)=>{
@@ -1160,14 +1258,30 @@ function renderTable() {
     return 0;
   });
   if (!data.length) {
-    document.getElementById('mainTable').innerHTML='<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--text2)">No tokens match filters</td></tr>';
+    document.getElementById('mainTable').innerHTML=`<tr><td colspan="13" style="text-align:center;padding:28px">
+      <div style="color:var(--text2);font-size:13px;margin-bottom:8px">No high-confidence tokens right now</div>
+      <div style="color:var(--text3);font-size:12px;max-width:420px;margin:0 auto;line-height:1.7">
+        The scanner is filtering hard — only tokens with 4+ signals, score ≥65, no flags, and confirmed momentum pass.<br>
+        Click <b style="color:var(--text2)">Show all</b> to see everything, or wait for the next refresh cycle.
+      </div>
+    </td></tr>`;
     return;
   }
   document.getElementById('mainTable').innerHTML = data.map(t=>{
     const s   = getCompositeScore(t);
     const sig = getSignal(t);
-    const {count,details} = countSignals(t);
     const ss  = getSafetyScore(t);
+    const {count, details, maxSignals} = countSignals(t);
+    const vRisk = getVolatilityRisk(t);
+    const vRiskHtml = vRisk==='high'
+      ? `<span style="font-size:10px;color:var(--red-l);display:block;margin-top:2px">⚡ high volatility</span>`
+      : vRisk==='medium'
+      ? `<span style="font-size:10px;color:var(--amber-l);display:block;margin-top:2px">~ medium volatility</span>` : '';
+    const dotColor = count>=6?'on-green':count>=4?'on-amber':'';
+    const dotsHtml = `<div class="strength-dots">
+      ${[0,1,2,3,4,5,6,7].map(i=>`<span class="sdot-sm ${i<count?dotColor:''}"></span>`).join('')}
+      <span style="font-size:10px;color:var(--text2);margin-left:3px">${count}/${maxSignals}</span>
+    </div>`;
     const flag= isFlagged(t);
     const rd  = rugData[t.ca];
     const p1  = t.priceChange1h||0;
@@ -1203,6 +1317,7 @@ function renderTable() {
       <td>
         <div class="tname">${t.name}<span class="badge b-${tag}">${tag}</span></div>
         <div class="tsub">${t.fullName}</div>
+        ${vRiskHtml}
         ${flagHtml}
       </td>
       <td>
@@ -1762,9 +1877,9 @@ function copyCA(ca,btn){
 }
 function setFilter(v){
   sigFilter=v;
-  ['fAll','fStrong','fBuy','fSell'].forEach(id=>document.getElementById(id).classList.remove('active'));
-  const m={all:'fAll',strong:'fStrong',buy:'fBuy',sell:'fSell'};
-  document.getElementById(m[v]).classList.add('active');
+  ['fAll','fStrong','fBuy','fSell','fAllRaw'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+  const m={all:'fAll',strong:'fStrong',buy:'fBuy',sell:'fSell',all_raw:'fAllRaw'};
+  document.getElementById(m[v])?.classList.add('active');
   renderTable();
 }
 function setScoreFilter(v){
