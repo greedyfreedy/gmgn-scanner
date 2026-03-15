@@ -274,8 +274,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
   <div class="filters">
     <span class="flabel">View:</span>
-    <button class="fchip active" id="fAll"    onclick="setFilter('all')">High conf (A+B)</button>
-    <button class="fchip" id="fStrong" onclick="setFilter('strong')">Tier A only</button>
+    <button class="fchip active" id="fAll"    onclick="setFilter('all')">All tokens</button>
+    <button class="fchip" id="fStrong" onclick="setFilter('strong')">High conf only</button>
     <button class="fchip" id="fBuy"    onclick="setFilter('buy')">All buy signals</button>
     <button class="fchip" id="fSell"   onclick="setFilter('sell')">Sell</button>
     <button class="fchip" id="fAllRaw" onclick="setFilter('all_raw')">Show all</button>
@@ -985,11 +985,13 @@ function getConfidenceTier(t) {
 // ─── FETCH DATA ───────────────────────────────────────────────────
 async function fetchAll() {
   if (paused) return;
+  // Step 1: fetch tokens and render immediately — don't wait for slow APIs
   await fetchDexscreener();
-  await fetchRugcheck();
-  if (CFG.heliusKey)   await fetchWalletData();
-  if (CFG.bitqueryKey) await fetchPumpFun();
-  renderAll();
+  renderAll(); // show tokens right away
+  // Step 2: enrich with safety + wallet data in background, re-render when done
+  try { await fetchRugcheck(); renderAll(); } catch(e) { console.warn('Rugcheck failed:', e); }
+  try { if (CFG.heliusKey)   { await fetchWalletData(); renderAll(); } } catch(e) {}
+  try { if (CFG.bitqueryKey) { await fetchPumpFun();    } } catch(e) {}
   runBacktest();
 }
 
@@ -1223,13 +1225,9 @@ function renderTable() {
   const sortBy = document.getElementById('sortSel').value;
   let data = [...tokens];
 
-  // Default: only show high confidence — score 75+, strong/buy signal, not flagged
+  // Default: show ALL tokens, sorted by score
   if (sigFilter==='all') {
-    data = data.filter(t => {
-      const s = getCompositeScore(t);
-      const sig = getSignal(t);
-      return s >= 75 && ['strong','buy'].includes(sig) && !isFlagged(t);
-    });
+    // no filter — show everything
   } else if (sigFilter==='strong') {
     data = data.filter(t => getSignal(t)==='strong' && !isFlagged(t));
   } else if (sigFilter==='buy') {
@@ -1237,7 +1235,7 @@ function renderTable() {
   } else if (sigFilter==='sell') {
     data = data.filter(t => getSignal(t)==='sell');
   } else if (sigFilter==='all_raw') {
-    // show everything unfiltered
+    // show everything including holds
   }
   if (scoreFilter>0) data=data.filter(t=>getCompositeScore(t)>=scoreFilter);
   if (safeOnly) data=data.filter(t=>getSafetyScore(t)>=CFG.safeMin&&!isFlagged(t));
@@ -1252,11 +1250,8 @@ function renderTable() {
   });
   if (!data.length) {
     document.getElementById('mainTable').innerHTML=`<tr><td colspan="13" style="text-align:center;padding:28px">
-      <div style="color:var(--text2);font-size:13px;margin-bottom:8px">No high-confidence tokens right now</div>
-      <div style="color:var(--text3);font-size:12px;max-width:420px;margin:0 auto;line-height:1.7">
-        The scanner is filtering hard — only tokens with 4+ signals, score ≥65, no flags, and confirmed momentum pass.<br>
-        Click <b style="color:var(--text2)">Show all</b> to see everything, or wait for the next refresh cycle.
-      </div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:8px">No tokens match current filters</div>
+      <div style="color:var(--text3);font-size:12px">Try clicking <b style="color:var(--text2)">All tokens</b> or <b style="color:var(--text2)">Show all</b> to see all fetched tokens.</div>
     </td></tr>`;
     return;
   }
