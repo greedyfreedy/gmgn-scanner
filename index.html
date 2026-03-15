@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GMGN Solana Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0e11;--bg2:#16161a;--bg3:#1e1e24;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0efe8;--text2:#888780;--text3:#55544f;
+  --green:#1D9E75;--green-l:#5DCAA5;
+  --red:#D85A30;--red-l:#F0997B;
+  --purple:#7F77DD;--purple-l:#AFA9EC;
+  --amber:#BA7517;--amber-l:#EF9F27;
+  --radius:10px;--radius-lg:14px;
+}
+html,body{background:var(--bg);color:var(--text);font-family:'DM Sans','Segoe UI',sans-serif;font-size:14px;min-height:100vh}
+a{color:var(--purple-l);text-decoration:none}
+a:hover{text-decoration:underline}
+.app{max-width:1280px;margin:0 auto;padding:20px 18px 48px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.brand h1{font-size:17px;font-weight:500;letter-spacing:-.2px}
+.brand p{font-size:12px;color:var(--text2);margin-top:2px}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:12px;padding:4px 11px;border-radius:99px;border:0.5px solid var(--border2);color:var(--text2);background:var(--bg2)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#liveLabel{color:var(--green);font-weight:500}
+.mono{font-family:'DM Mono','Courier New',monospace}
+.countdown{font-size:12px;color:var(--text2)}
+.btn{font-size:12px;padding:5px 13px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;transition:background .15s}
+.btn:hover{background:var(--bg3)}
+select.btn{appearance:none;padding-right:22px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888780'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.statusbar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);margin-bottom:14px;flex-wrap:wrap}
+.status-pill{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500}
+.status-ok{background:rgba(29,158,117,.15);color:var(--green-l);border:0.5px solid rgba(29,158,117,.3)}
+.status-err{background:rgba(216,90,48,.15);color:var(--red-l);border:0.5px solid rgba(216,90,48,.3)}
+.status-load{background:rgba(127,119,221,.15);color:var(--purple-l);border:0.5px solid rgba(127,119,221,.3)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.mc{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:13px 15px}
+.ml{font-size:11px;color:var(--text2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.4px}
+.mv{font-size:23px;font-weight:500;line-height:1}
+.md{font-size:11px;margin-top:5px;color:var(--text3)}
+.up{color:var(--green)}.down{color:var(--red)}.neutral{color:var(--text2)}
+.charts-row{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;margin-bottom:14px}
+.card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:15px}
+.ctitle{font-size:11px;font-weight:500;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--text2);margin-bottom:8px;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:4px}
+.lsq{width:8px;height:8px;border-radius:2px;display:inline-block}
+.table-wrap{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
+th{padding:8px 10px;text-align:left;font-weight:500;font-size:11px;color:var(--text2);border-bottom:0.5px solid var(--border);text-transform:uppercase;letter-spacing:.3px;background:var(--bg3);white-space:nowrap}
+td{padding:9px 10px;border-bottom:0.5px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+.tname{font-weight:500;font-size:13px}
+.tsub{font-size:10px;color:var(--text2);margin-top:1px}
+.ca-wrap{display:flex;align-items:center;gap:5px}
+.ca-text{font-size:10px;font-family:'DM Mono','Courier New',monospace;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:5px;border:0.5px solid var(--border);max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy-btn{font-size:10px;padding:2px 6px;border-radius:5px;border:0.5px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .15s}
+.copy-btn:hover{background:var(--bg3);color:var(--text)}
+.copy-btn.copied{color:var(--green-l);border-color:rgba(29,158,117,.4)}
+.sig{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.sig-buy{background:rgba(29,158,117,.15);color:var(--green-l);border:0.5px solid rgba(29,158,117,.35)}
+.sig-sell{background:rgba(216,90,48,.15);color:var(--red-l);border:0.5px solid rgba(216,90,48,.35)}
+.sig-hold{background:rgba(136,135,128,.1);color:var(--text2);border:0.5px solid var(--border)}
+.sdot{width:5px;height:5px;border-radius:50%;display:inline-block}
+.score-pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:99px;font-weight:500}
+.sh{background:rgba(29,158,117,.15);color:var(--green-l);border:0.5px solid rgba(29,158,117,.3)}
+.sm{background:rgba(186,117,23,.15);color:var(--amber-l);border:0.5px solid rgba(186,117,23,.3)}
+.sl{background:rgba(216,90,48,.15);color:var(--red-l);border:0.5px solid rgba(216,90,48,.3)}
+.badge{font-size:10px;padding:2px 7px;border-radius:99px;margin-left:3px}
+.b-hot{background:rgba(216,90,48,.15);color:var(--red-l);border:0.5px solid rgba(216,90,48,.25)}
+.b-new{background:rgba(127,119,221,.15);color:var(--purple-l);border:0.5px solid rgba(127,119,221,.3)}
+.b-rising{background:rgba(29,158,117,.15);color:var(--green-l);border:0.5px solid rgba(29,158,117,.3)}
+.fbar{height:5px;border-radius:99px;background:var(--bg3);overflow:hidden;flex:1;min-width:28px}
+.fbuy{height:100%;border-radius:99px;background:var(--green)}
+.fsell{height:100%;border-radius:99px;background:var(--red)}
+.fpur{height:100%;border-radius:99px;background:var(--purple)}
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.feed-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:12px}
+.feed-row:last-child{border-bottom:none}
+.fdot{width:6px;height:6px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.ftime{color:var(--text2);font-size:10px;min-width:46px;margin-top:2px;font-family:'DM Mono','Courier New',monospace}
+.fmsg{color:var(--text);flex:1;line-height:1.45}
+.fempty{font-size:12px;color:var(--text2);padding:10px 0}
+.filters{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.fchip{font-size:11px;padding:4px 11px;border-radius:99px;border:0.5px solid var(--border2);cursor:pointer;background:transparent;color:var(--text2);transition:all .15s}
+.fchip:hover{background:var(--bg3)}
+.fchip.active{background:rgba(127,119,221,.2);border-color:var(--purple);color:var(--purple-l)}
+.flabel{font-size:11px;color:var(--text3)}
+.spinner{width:22px;height:22px;border:2px solid var(--border2);border-top-color:var(--purple);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px;gap:12px}
+.disclaimer{font-size:11px;color:var(--text3);padding:10px 14px;border-left:2px solid var(--border2);line-height:1.7}
+@media(max-width:700px){
+  .metrics{grid-template-columns:1fr 1fr}
+  .charts-row{grid-template-columns:1fr}
+  .bottom-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>GMGN Solana scanner</h1>
+      <p>Live new launches via Dexscreener · buy/sell signals from volume + momentum</p>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><span class="pulse"></span><span id="liveLabel">Live</span></div>
+      <span class="countdown mono" id="countdown">Next: 30s</span>
+      <select class="btn" id="intervalSel" onchange="setRefreshInterval()">
+        <option value="30">Refresh: 30s</option>
+        <option value="60">Refresh: 60s</option>
+        <option value="120">Refresh: 2min</option>
+      </select>
+      <button class="btn" id="pauseBtn" onclick="togglePause()">Pause</button>
+      <button class="btn" onclick="fetchData()">Refresh now</button>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="status-pill status-load" id="statusPill">Connecting...</span>
+    <span id="statusMsg">Fetching data from Dexscreener API</span>
+    <span style="margin-left:auto;color:var(--text3)" id="lastUpdate"></span>
+  </div>
+
+  <div class="metrics" id="metrics">
+    <div class="mc"><div class="ml">Buy signals</div><div class="mv neutral">—</div></div>
+    <div class="mc"><div class="ml">Sell signals</div><div class="mv neutral">—</div></div>
+    <div class="mc"><div class="ml">Avg score</div><div class="mv neutral">—</div></div>
+    <div class="mc"><div class="ml">Mooning (&gt;20% 1h)</div><div class="mv neutral">—</div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="ctitle">Top token score history</div>
+      <div class="legend" id="lineLeg"><span style="color:var(--text3);font-size:11px">Loading...</span></div>
+      <div style="position:relative;height:155px"><canvas id="lineChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">Volume surge vs momentum</div>
+      <div class="legend">
+        <span><span class="lsq" style="background:#7F77DD"></span>Vol score</span>
+        <span><span class="lsq" style="background:#1D9E75"></span>Momentum</span>
+      </div>
+      <div style="position:relative;height:155px"><canvas id="barChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="flabel">Signal:</span>
+    <button class="fchip active" id="fAll" onclick="setFilter('all')">All</button>
+    <button class="fchip" id="fBuy" onclick="setFilter('buy')">Buy only</button>
+    <button class="fchip" id="fSell" onclick="setFilter('sell')">Sell only</button>
+    <span class="flabel" style="margin-left:8px">Min score:</span>
+    <button class="fchip active" id="fs0"  onclick="setScoreFilter(0)">All</button>
+    <button class="fchip" id="fs60" onclick="setScoreFilter(60)">60+</button>
+    <button class="fchip" id="fs75" onclick="setScoreFilter(75)">75+</button>
+    <button class="fchip" id="fs90" onclick="setScoreFilter(90)">90+</button>
+    <span style="margin-left:auto">
+      <select class="btn" id="sortSel" onchange="renderTable()">
+        <option value="score">Sort: score</option>
+        <option value="priceChange">Sort: 1h change</option>
+        <option value="volume">Sort: volume</option>
+        <option value="mcap">Sort: market cap</option>
+        <option value="age">Sort: newest first</option>
+      </select>
+    </span>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th style="width:13%">Token</th>
+          <th style="width:19%">Contract address (CA)</th>
+          <th style="width:7%">Age</th>
+          <th style="width:9%">Market cap</th>
+          <th style="width:7%">1h %</th>
+          <th style="width:7%">6h %</th>
+          <th style="width:9%">Vol surge</th>
+          <th style="width:9%">Momentum</th>
+          <th style="width:7%">Score</th>
+          <th style="width:8%">Signal</th>
+          <th style="width:5%">Chart</th>
+        </tr></thead>
+        <tbody id="mainTable">
+          <tr><td colspan="11"><div class="loading-overlay">
+            <div class="spinner"></div>
+            <span style="color:var(--text2);font-size:13px">Fetching tokens from Dexscreener...</span>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="card">
+      <div class="ctitle">Signal log</div>
+      <div id="signalFeed"><div class="fempty">Watching for signal changes...</div></div>
+    </div>
+    <div class="card">
+      <div class="ctitle">Alert feed</div>
+      <div id="alertFeed"><div class="fempty">Monitoring for signals...</div></div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    Data sourced live from <a href="https://dexscreener.com" target="_blank">Dexscreener public API</a> — no API key required.
+    Buy/Sell signals are calculated from volume surge score, price momentum (1h/6h), and liquidity depth — these approximate smart money activity but are NOT actual wallet-level data.
+    For true smart wallet tracking, connect <a href="https://birdeye.so" target="_blank">Birdeye API</a>.
+    This is not financial advice. Always verify on-chain before trading. DYOR.
+  </div>
+</div>
+
+<script>
+const API_URL = 'https://api.dexscreener.com/latest/dex/search?q=SOL&rankBy=trendingScoreH6&order=desc&chain=solana';
+
+let tokens = [];
+let scoreHistory = {};
+let signals = [];
+let alerts = [];
+let prevSignals = {};
+let paused = false;
+let refreshSecs = 30;
+let cdValue = 30;
+let cdTimer = null;
+let sigFilter = 'all';
+let scoreFilter = 0;
+let lineChart = null, barChart = null;
+let firstLoad = true;
+
+function timeNow() {
+  const n = new Date();
+  return [n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>v.toString().padStart(2,'0')).join(':');
+}
+
+function mcapFmt(v) {
+  if (!v) return '—';
+  if (v >= 1e9) return '$'+(v/1e9).toFixed(2)+'B';
+  if (v >= 1e6) return '$'+(v/1e6).toFixed(2)+'M';
+  if (v >= 1e3) return '$'+Math.round(v/1e3)+'K';
+  return '$'+Math.round(v);
+}
+
+function volFmt(v) {
+  if (!v) return '—';
+  if (v >= 1e6) return '$'+(v/1e6).toFixed(1)+'M';
+  if (v >= 1e3) return '$'+Math.round(v/1e3)+'K';
+  return '$'+Math.round(v);
+}
+
+function shortCA(ca) {
+  if (!ca || ca.length < 10) return ca || '—';
+  return ca.slice(0,5)+'...'+ca.slice(-4);
+}
+
+function ageFmt(ms) {
+  if (!ms) return '—';
+  const s = (Date.now() - ms) / 1000;
+  if (s < 60) return Math.round(s)+'s';
+  if (s < 3600) return Math.round(s/60)+'m';
+  if (s < 86400) return (s/3600).toFixed(1)+'h';
+  return Math.round(s/86400)+'d';
+}
+
+function getVolScore(t) {
+  const ratio = (t.volumeH1 || 0) / (t.mcap || 1);
+  if (ratio > 0.5) return 97;
+  if (ratio > 0.2) return Math.round(75 + ratio * 55);
+  if (ratio > 0.05) return Math.round(45 + ratio * 300);
+  if (ratio > 0.01) return Math.round(22 + ratio * 1000);
+  return Math.max(5, Math.round(ratio * 2000));
+}
+
+function getMomentumScore(t) {
+  const p1 = t.priceChange1h || 0;
+  const p6 = t.priceChange6h || 0;
+  const p24 = t.priceChange24h || 0;
+  const w = p1 * 0.5 + p6 * 0.3 + p24 * 0.2;
+  if (w > 100) return 99;
+  if (w > 50)  return Math.round(85 + w * 0.07);
+  if (w > 20)  return Math.round(65 + w * 0.5);
+  if (w > 5)   return Math.round(50 + w * 1.5);
+  if (w > 0)   return Math.round(40 + w * 2);
+  if (w > -10) return Math.round(30 + w);
+  return Math.max(5, Math.round(20 + w * 0.5));
+}
+
+function getLiqScore(t) {
+  const liq = t.liquidity || 0;
+  if (liq > 500000) return 92;
+  if (liq > 100000) return 76;
+  if (liq > 50000)  return 62;
+  if (liq > 10000)  return 46;
+  if (liq > 2000)   return 30;
+  return 14;
+}
+
+function getScore(t) {
+  return Math.min(99, Math.round(getVolScore(t)*0.4 + getMomentumScore(t)*0.4 + getLiqScore(t)*0.2));
+}
+
+function getSignal(t) {
+  const vs = getVolScore(t);
+  const ms = getMomentumScore(t);
+  const p1 = t.priceChange1h || 0;
+  const p6 = t.priceChange6h || 0;
+  const liq = t.liquidity || 0;
+
+  if (p6 < -25) return 'sell';
+  if (p1 < -10 && p6 < -15) return 'sell';
+  if (p1 < -5 && vs < 25 && ms < 30) return 'sell';
+  if (liq < 5000 && p1 < -3) return 'sell';
+
+  if (vs > 80 && p1 > 5 && liq > 20000) return 'buy';
+  if (vs > 70 && ms > 65 && p1 > 10) return 'buy';
+  if (ms > 80 && vs > 50 && p6 > 15) return 'buy';
+
+  return 'hold';
+}
+
+function getTag(t) {
+  const ageMin = t.createdAt ? (Date.now() - t.createdAt) / 60000 : 9999;
+  if ((t.priceChange1h || 0) > 30 || getVolScore(t) > 80) return 'hot';
+  if (ageMin < 30) return 'new';
+  return 'rising';
+}
+
+async function fetchData() {
+  if (paused) return;
+  setStatus('load', 'Fetching from Dexscreener...');
+  try {
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const pairs = (data.pairs || [])
+      .filter(p => p.chainId === 'solana' && p.baseToken && (p.quoteToken?.symbol === 'SOL' || p.quoteToken?.symbol === 'WSOL'))
+      .slice(0, 25);
+
+    if (!pairs.length) throw new Error('No Solana pairs found in response');
+
+    tokens = pairs.map(p => ({
+      name:         (p.baseToken.symbol || '???').slice(0, 12),
+      fullName:     (p.baseToken.name || '').slice(0, 22),
+      ca:           p.baseToken.address || '',
+      pairAddress:  p.pairAddress || '',
+      mcap:         p.fdv || p.marketCap || 0,
+      price:        parseFloat(p.priceUsd) || 0,
+      priceChange1h:  p.priceChange?.h1  || 0,
+      priceChange6h:  p.priceChange?.h6  || 0,
+      priceChange24h: p.priceChange?.h24 || 0,
+      volumeH1:     p.volume?.h1  || 0,
+      volumeH6:     p.volume?.h6  || 0,
+      volume24h:    p.volume?.h24 || 0,
+      liquidity:    p.liquidity?.usd || 0,
+      createdAt:    p.pairCreatedAt || null,
+      url:          p.url || ('https://dexscreener.com/solana/' + (p.pairAddress || ''))
+    }));
+
+    tokens.forEach(t => {
+      const s = getScore(t);
+      if (!scoreHistory[t.ca]) scoreHistory[t.ca] = [];
+      scoreHistory[t.ca].push(s);
+      if (scoreHistory[t.ca].length > 12) scoreHistory[t.ca].shift();
+
+      const newSig = getSignal(t);
+      if (prevSignals[t.ca] !== undefined && prevSignals[t.ca] !== newSig) {
+        signals.unshift({
+          name: t.name, sig: newSig, prev: prevSignals[t.ca],
+          time: timeNow(), score: s, p1: t.priceChange1h, vs: getVolScore(t)
+        });
+        if (signals.length > 10) signals.pop();
+      }
+      prevSignals[t.ca] = newSig;
+    });
+
+    checkAlerts();
+    setStatus('ok', tokens.length + ' Solana tokens loaded from Dexscreener');
+    document.getElementById('lastUpdate').textContent = 'Updated ' + timeNow();
+    renderAll();
+    firstLoad = false;
+
+  } catch (err) {
+    console.error(err);
+    setStatus('err', 'API error: ' + err.message);
+    if (firstLoad) {
+      document.getElementById('mainTable').innerHTML = `<tr><td colspan="11">
+        <div class="loading-overlay">
+          <span style="color:var(--red-l);font-size:13px">Could not reach Dexscreener API.</span>
+          <span style="color:var(--text2);font-size:12px;text-align:center;max-width:400px">
+            Open this file via a web server (GitHub Pages, Live Server, etc.) — browsers block direct API calls from local files due to CORS policy.
+          </span>
+          <button class="btn" onclick="fetchData()" style="margin-top:4px">Retry</button>
+        </div>
+      </td></tr>`;
+    }
+  }
+}
+
+function checkAlerts() {
+  tokens.slice(0, 10).forEach(t => {
+    const sig = getSignal(t);
+    const vs  = getVolScore(t);
+    const p1  = t.priceChange1h || 0;
+    let a = null;
+    if (sig === 'buy' && vs > 75)
+      a = { txt: t.name + ' — volume surge ' + volFmt(t.volumeH1) + ' in 1h · BUY signal', color: '#1D9E75' };
+    else if (sig === 'sell' && p1 < -8)
+      a = { txt: t.name + ' — price falling ' + p1.toFixed(1) + '% · SELL signal', color: '#D85A30' };
+    else if (p1 > 50)
+      a = { txt: t.name + ' up ' + p1.toFixed(1) + '% in 1h — momentum spike', color: '#BA7517' };
+    if (a) {
+      a.time = timeNow();
+      if (!alerts.length || alerts[0].txt !== a.txt) {
+        alerts.unshift(a);
+        if (alerts.length > 8) alerts.pop();
+      }
+    }
+  });
+}
+
+function setStatus(type, msg) {
+  const pill = document.getElementById('statusPill');
+  pill.className = 'status-pill status-' + (type==='ok'?'ok':type==='err'?'err':'load');
+  pill.textContent = type==='ok'?'Live':type==='err'?'Error':'Loading';
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function renderMetrics() {
+  if (!tokens.length) return;
+  const buyN  = tokens.filter(t => getSignal(t) === 'buy').length;
+  const sellN = tokens.filter(t => getSignal(t) === 'sell').length;
+  const avg   = Math.round(tokens.reduce((a,t) => a + getScore(t), 0) / tokens.length);
+  const hotN  = tokens.filter(t => (t.priceChange1h||0) > 20).length;
+  document.getElementById('metrics').innerHTML = [
+    { label:'Buy signals',      val:buyN,  delta:'active now',           cls:'up'    },
+    { label:'Sell signals',     val:sellN, delta:'exit signals',          cls:'down'  },
+    { label:'Avg score',        val:avg,   delta:'across all tokens',     cls: avg>60?'up':'neutral' },
+    { label:'Mooning (>20% 1h)',val:hotN,  delta:'tokens pumping',        cls: hotN>1?'up':'neutral' },
+  ].map(c => `<div class="mc"><div class="ml">${c.label}</div><div class="mv ${c.cls}">${c.val}</div><div class="md">${c.delta}</div></div>`).join('');
+}
+
+function renderTable() {
+  if (!tokens.length) return;
+  const sortBy = document.getElementById('sortSel').value;
+  let data = [...tokens];
+  if (sigFilter !== 'all') data = data.filter(t => getSignal(t) === sigFilter);
+  if (scoreFilter > 0)     data = data.filter(t => getScore(t) >= scoreFilter);
+  data.sort((a,b) => {
+    if (sortBy==='score')       return getScore(b) - getScore(a);
+    if (sortBy==='priceChange') return (b.priceChange1h||0) - (a.priceChange1h||0);
+    if (sortBy==='volume')      return (b.volumeH1||0) - (a.volumeH1||0);
+    if (sortBy==='mcap')        return (b.mcap||0) - (a.mcap||0);
+    if (sortBy==='age')         return (a.createdAt||0) - (b.createdAt||0);
+    return 0;
+  });
+  if (!data.length) {
+    document.getElementById('mainTable').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">No tokens match filters</td></tr>';
+    return;
+  }
+  document.getElementById('mainTable').innerHTML = data.map(t => {
+    const s   = getScore(t);
+    const sig = getSignal(t);
+    const tag = getTag(t);
+    const sc  = s>=75?'sh':s>=55?'sm':'sl';
+    const p1  = t.priceChange1h||0;
+    const p6  = t.priceChange6h||0;
+    const vs  = getVolScore(t);
+    const ms  = getMomentumScore(t);
+
+    const sigHtml = sig==='buy'
+      ? `<span class="sig sig-buy"><span class="sdot" style="background:var(--green)"></span>BUY</span>`
+      : sig==='sell'
+      ? `<span class="sig sig-sell"><span class="sdot" style="background:var(--red)"></span>SELL</span>`
+      : `<span class="sig sig-hold"><span class="sdot" style="background:var(--text2)"></span>HOLD</span>`;
+
+    return `<tr>
+      <td>
+        <div class="tname">${t.name}<span class="badge b-${tag}">${tag}</span></div>
+        <div class="tsub">${t.fullName}</div>
+      </td>
+      <td>
+        <div class="ca-wrap">
+          <span class="ca-text" title="${t.ca}">${shortCA(t.ca)}</span>
+          <button class="copy-btn" onclick="copyCA('${t.ca}',this)">Copy</button>
+        </div>
+      </td>
+      <td style="color:var(--text2);font-size:11px">${ageFmt(t.createdAt)}</td>
+      <td style="font-size:11px">${mcapFmt(t.mcap)}</td>
+      <td class="${p1>=0?'up':'down'}">${p1>=0?'+':''}${p1.toFixed(1)}%</td>
+      <td class="${p6>=0?'up':'down'}">${p6>=0?'+':''}${p6.toFixed(1)}%</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px">
+          <span style="color:var(--text2);min-width:22px">${vs}</span>
+          <div class="fbar"><div class="fbuy" style="width:${vs}%"></div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${volFmt(t.volumeH1)}</div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px">
+          <span style="color:var(--text2);min-width:22px">${ms}</span>
+          <div class="fbar"><div class="fpur" style="width:${ms}%"></div></div>
+        </div>
+      </td>
+      <td><span class="score-pill ${sc}">${s}</span></td>
+      <td>${sigHtml}</td>
+      <td><a href="${t.url}" target="_blank" style="font-size:11px;color:var(--purple-l)">Open ↗</a></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCharts() {
+  if (!tokens.length) return;
+  const top3 = [...tokens].sort((a,b)=>getScore(b)-getScore(a)).slice(0,3);
+  const COLS = ['#7F77DD','#1D9E75','#D85A30'];
+  const labels = Array.from({length:12},(_,i)=>i===11?'now':'-'+(11-i)*10+'s');
+
+  if (!lineChart) {
+    lineChart = new Chart(document.getElementById('lineChart'), {
+      type:'line',
+      data:{labels, datasets: top3.map((t,i)=>({
+        label:t.name, data:(scoreHistory[t.ca]||[getScore(t)]).slice(),
+        borderColor:COLS[i], backgroundColor:'transparent',
+        pointRadius:2, borderWidth:2, tension:.4
+      }))},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{font:{size:10},color:'#888780',maxRotation:0},grid:{display:false}},
+          y:{min:0,max:100,ticks:{font:{size:10},color:'#888780',stepSize:25},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  } else {
+    lineChart.data.datasets = top3.map((t,i)=>({
+      label:t.name, data:(scoreHistory[t.ca]||[getScore(t)]).slice(),
+      borderColor:COLS[i], backgroundColor:'transparent',
+      pointRadius:2, borderWidth:2, tension:.4
+    }));
+    lineChart.update('none');
+  }
+  document.getElementById('lineLeg').innerHTML = top3.map((t,i)=>
+    `<span><span class="lsq" style="background:${COLS[i]}"></span>${t.name}</span>`
+  ).join('');
+
+  const top6 = [...tokens].sort((a,b)=>getScore(b)-getScore(a)).slice(0,6);
+  if (!barChart) {
+    barChart = new Chart(document.getElementById('barChart'), {
+      type:'bar',
+      data:{
+        labels: top6.map(t=>t.name),
+        datasets:[
+          {label:'Vol score', data:top6.map(t=>getVolScore(t)), backgroundColor:'#7F77DD', borderRadius:3},
+          {label:'Momentum',  data:top6.map(t=>getMomentumScore(t)), backgroundColor:'#1D9E75', borderRadius:3}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{font:{size:10},color:'#888780'},grid:{display:false}},
+          y:{min:0,max:100,ticks:{font:{size:10},color:'#888780',stepSize:25},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  } else {
+    barChart.data.labels = top6.map(t=>t.name);
+    barChart.data.datasets[0].data = top6.map(t=>getVolScore(t));
+    barChart.data.datasets[1].data = top6.map(t=>getMomentumScore(t));
+    barChart.update('none');
+  }
+}
+
+function renderSignals() {
+  const el = document.getElementById('signalFeed');
+  if (!signals.length) { el.innerHTML='<div class="fempty">Watching for signal changes...</div>'; return; }
+  el.innerHTML = signals.map(s => {
+    const col = s.sig==='buy'?'#1D9E75':s.sig==='sell'?'#D85A30':'#888780';
+    const why = s.sig==='buy'?`vol surge (${s.vs})`:s.sig==='sell'?`price ${s.p1.toFixed(1)}%`:'neutral';
+    return `<div class="feed-row">
+      <span class="fdot" style="background:${col}"></span>
+      <span class="ftime">${s.time}</span>
+      <span class="fmsg"><b>${s.name}</b> → <span style="color:${col};font-weight:500">${s.sig.toUpperCase()}</span> <span style="color:var(--text2)">(${why})</span></span>
+    </div>`;
+  }).join('');
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alertFeed');
+  if (!alerts.length) { el.innerHTML='<div class="fempty">Monitoring activity...</div>'; return; }
+  el.innerHTML = alerts.map(a => `
+    <div class="feed-row">
+      <span class="fdot" style="background:${a.color}"></span>
+      <span class="ftime">${a.time}</span>
+      <span class="fmsg">${a.txt}</span>
+    </div>`).join('');
+}
+
+function renderAll() {
+  renderMetrics();
+  renderTable();
+  renderCharts();
+  renderSignals();
+  renderAlerts();
+}
+
+function copyCA(ca, btn) {
+  navigator.clipboard.writeText(ca).then(() => {
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1400);
+  }).catch(() => { btn.textContent = 'Failed'; setTimeout(()=>btn.textContent='Copy',1200); });
+}
+
+function setFilter(v) {
+  sigFilter = v;
+  ['fAll','fBuy','fSell'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(v==='all'?'fAll':v==='buy'?'fBuy':'fSell').classList.add('active');
+  renderTable();
+}
+
+function setScoreFilter(v) {
+  scoreFilter = v;
+  ['fs0','fs60','fs75','fs90'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('fs'+v).classList.add('active');
+  renderTable();
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  document.getElementById('liveLabel').textContent = paused ? 'Paused' : 'Live';
+  document.getElementById('liveLabel').style.color = paused ? '#888780' : '#1D9E75';
+  document.querySelector('.pulse').style.animationPlayState = paused ? 'paused' : 'running';
+}
+
+function setRefreshInterval() {
+  refreshSecs = parseInt(document.getElementById('intervalSel').value);
+  cdValue = refreshSecs;
+  document.getElementById('countdown').textContent = 'Next: ' + cdValue + 's';
+}
+
+function startCountdown() {
+  clearInterval(cdTimer);
+  cdTimer = setInterval(() => {
+    if (paused) return;
+    cdValue--;
+    document.getElementById('countdown').textContent = 'Next: ' + cdValue + 's';
+    if (cdValue <= 0) { cdValue = refreshSecs; fetchData(); }
+  }, 1000);
+}
+
+fetchData();
+startCountdown();
+</script>
+</body>
+</html>
