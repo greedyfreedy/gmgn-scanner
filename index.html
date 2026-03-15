@@ -274,9 +274,9 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
   <div class="filters">
     <span class="flabel">View:</span>
-    <button class="fchip active" id="fAll"    onclick="setFilter('all')">High conf only</button>
-    <button class="fchip" id="fStrong" onclick="setFilter('strong')">Strong buy</button>
-    <button class="fchip" id="fBuy"    onclick="setFilter('buy')">Buy</button>
+    <button class="fchip active" id="fAll"    onclick="setFilter('all')">High conf (A+B)</button>
+    <button class="fchip" id="fStrong" onclick="setFilter('strong')">Tier A only</button>
+    <button class="fchip" id="fBuy"    onclick="setFilter('buy')">All buy signals</button>
     <button class="fchip" id="fSell"   onclick="setFilter('sell')">Sell</button>
     <button class="fchip" id="fAllRaw" onclick="setFilter('all_raw')">Show all</button>
     <span class="flabel" style="margin-left:6px">Min score:</span>
@@ -669,12 +669,12 @@ let firstLoad = true;
 
 // ─── CONFIG (saved to localStorage) ──────────────────────────────
 let CFG = {
-  volMin: 75,   // was 65 — require strong volume surge
-  momMin: 70,   // was 60 — require confirmed momentum
-  safeMin: 65,  // was 50 — require solid safety score
-  liqMin: 25000,// was 10000 — require real liquidity
-  sigMin: 4,    // was 3 — require 4/6 signals for STRONG BUY
-  ageMax: 90,   // was 120 — new launches only (max 90 min old)
+  volMin: 72,    // strong volume required
+  momMin: 68,    // confirmed momentum
+  safeMin: 62,   // safety must pass rugcheck
+  liqMin: 20000, // min $20k liquidity
+  sigMin: 4,     // 4/8 signals for STRONG BUY
+  ageMax: 90,    // max 90 min old
   skipNoLp: true, skipConc: true, skipBundle: true, skipDev: true, skipMint: true,
   heliusKey: '', birdeyeKey: '', bitqueryKey: '',
   trackedWallets: [
@@ -953,9 +953,33 @@ function getCompositeScore(t) {
   const wl=parseInt(document.getElementById('wLiq')?.value||10);
   const total = wv+wm+ws+wl||1;
   const raw = (getVolScore(t)*wv + getMomScore(t)*wm + getSafetyScore(t)*ws + getLiqScore(t)*wl) / total;
-  // penalise if flagged
   const flagPenalty = isFlagged(t) ? 15 : 0;
   return Math.max(0, Math.min(99, Math.round(raw - flagPenalty)));
+}
+
+function getConfidenceTier(t) {
+  const s   = getCompositeScore(t);
+  const sig = getSignal(t);
+  const {count} = countSignals(t);
+  const ss  = getSafetyScore(t);
+  const liq = t.liquidity || 0;
+  const p1  = t.priceChange1h || 0;
+  const flagged = isFlagged(t);
+
+  // TIER A — highest confidence, target 75–90% win rate
+  if (sig==='strong' && s>=82 && count>=5 && ss>=65 && liq>=20000 && p1>5 && p1<200 && !flagged)
+    return { tier:'A', label:'Tier A · 80–90%', color:'#1D9E75', bg:'rgba(29,158,117,.18)', border:'rgba(29,158,117,.5)' };
+
+  // TIER B — good confidence, target 65–75% win rate
+  if (['strong','buy'].includes(sig) && s>=75 && count>=4 && ss>=55 && liq>=10000 && p1>3 && !flagged)
+    return { tier:'B', label:'Tier B · 65–75%', color:'#5DCAA5', bg:'rgba(29,158,117,.1)', border:'rgba(29,158,117,.3)' };
+
+  // TIER C — moderate, target 55–65%
+  if (['strong','buy'].includes(sig) && s>=65 && count>=3 && !flagged)
+    return { tier:'C', label:'Tier C · 55–65%', color:'#EF9F27', bg:'rgba(186,117,23,.1)', border:'rgba(186,117,23,.3)' };
+
+  // AVOID
+  return { tier:'X', label:'Avoid', color:'#888780', bg:'transparent', border:'rgba(136,135,128,.2)' };
 }
 
 // ─── FETCH DATA ───────────────────────────────────────────────────
@@ -972,48 +996,26 @@ async function fetchAll() {
 async function fetchDexscreener() {
   setStatus('load','Fetching Solana tokens...');
   try {
-    // These endpoints work from browser without CORS issues
-    const QUERIES = [
-      'https://api.dexscreener.com/latest/dex/search?q=pump&chain=solana',
-      'https://api.dexscreener.com/latest/dex/search?q=meme&chain=solana',
-      'https://api.dexscreener.com/latest/dex/search?q=cat&chain=solana',
-      'https://api.dexscreener.com/latest/dex/search?q=dog&chain=solana',
-      'https://api.dexscreener.com/latest/dex/search?q=pepe&chain=solana',
-    ];
+    const res = await fetch('https://api.dexscreener.com/latest/dex/search?q=SOL&rankBy=trendingScoreH6&order=desc&chain=solana');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
 
-    // Fire all queries in parallel
-    const results = await Promise.allSettled(QUERIES.map(url => fetch(url)));
-    let allPairs = [];
-
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.ok) {
-        try {
-          const data = await result.value.json();
-          allPairs = allPairs.concat(data.pairs || []);
-        } catch(e) {}
-      }
-    }
-
-    // Deduplicate by base token CA
     const seenCA = new Set();
-    const SKIP_SYMBOLS = new Set(['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD','BONK','WIF','JUP','PYTH','JTO']);
+    const SKIP = new Set(['USDC','USDT','WSOL','SOL','WBTC','WETH','DAI','BUSD']);
 
-    const pairs = allPairs
+    const pairs = (data.pairs || [])
       .filter(p => {
         if (!p || p.chainId !== 'solana') return false;
-        if (!p.baseToken?.address || !p.baseToken?.symbol) return false;
+        if (!p.baseToken?.address) return false;
         if (seenCA.has(p.baseToken.address)) return false;
         const sym = (p.baseToken.symbol || '').toUpperCase();
-        if (SKIP_SYMBOLS.has(sym)) return false;
-        // must have some volume
-        if ((p.volume?.h24 || 0) < 500) return false;
+        if (SKIP.has(sym)) return false;
         seenCA.add(p.baseToken.address);
         return true;
       })
-      .sort((a, b) => (b.volume?.h1 || 0) - (a.volume?.h1 || 0))
       .slice(0, 40);
 
-    if (!pairs.length) throw new Error('No pairs returned — check your internet connection');
+    if (!pairs.length) throw new Error('No pairs returned');
 
     tokens = pairs.map(p => ({
       name:          (p.baseToken.symbol || '???').slice(0, 12),
@@ -1187,21 +1189,19 @@ function renderWalletTab(recentBuys=[], devActivity=[]) {
 // ─── RENDER ───────────────────────────────────────────────────────
 function renderMetrics() {
   if (!tokens.length) return;
-  const strongN  = tokens.filter(t=>getSignal(t)==='strong').length;
-  const buyN     = tokens.filter(t=>getSignal(t)==='buy').length;
-  const sellN    = tokens.filter(t=>getSignal(t)==='sell').length;
-  const rugN     = Object.values(rugData).filter(r=>r.isRug||r.bundled).length;
-  const highConf = tokens.filter(t=>getSignal(t)==='strong'&&getCompositeScore(t)>=75&&!isFlagged(t)).length;
-  // win rate estimate: weighted by signal quality
-  const trades   = tokens.filter(t=>['strong','buy'].includes(getSignal(t))&&!isFlagged(t));
-  const avgSig   = trades.length ? trades.reduce((a,t)=>a+countSignals(t).count,0)/trades.length : 0;
-  const winEst   = trades.length ? Math.min(88, Math.round(45 + avgSig*6 + (strongN/Math.max(1,trades.length))*15 + (rugN===0?5:0))) : 0;
+  const tierA   = tokens.filter(t=>getConfidenceTier(t).tier==='A').length;
+  const tierB   = tokens.filter(t=>getConfidenceTier(t).tier==='B').length;
+  const sellN   = tokens.filter(t=>getSignal(t)==='sell').length;
+  const rugN    = Object.values(rugData).filter(r=>r.isRug||r.bundled).length;
+  const abTrades= tokens.filter(t=>['A','B'].includes(getConfidenceTier(t).tier));
+  const avgSig  = abTrades.length ? abTrades.reduce((a,t)=>a+countSignals(t).count,0)/abTrades.length : 0;
+  const winEst  = abTrades.length ? Math.min(90, Math.round(48 + avgSig*6 + tierA*3 + (rugN===0?4:0))) : 0;
   document.getElementById('metrics').innerHTML = [
-    {label:'High confidence', val:highConf,     delta:'score 75+ · 4+ signals', cls:'up'},
-    {label:'Strong buy',      val:strongN,      delta:'all signals aligned',     cls:'up'},
-    {label:'Buy signals',     val:buyN,         delta:'good setup',              cls:'neutral'},
-    {label:'Rugs blocked',    val:rugN,         delta:'auto-filtered',           cls: rugN>0?'down':'neutral'},
-    {label:'Est. win rate',   val:winEst+'%',   delta:'high-conf trades only',   cls: winEst>=70?'up':winEst>=55?'warn':'down'},
+    {label:'Tier A · 80–90%',  val:tierA,       delta:'highest confidence',     cls:'up'},
+    {label:'Tier B · 65–75%',  val:tierB,       delta:'good confidence',        cls:'up'},
+    {label:'Sell / exit',      val:sellN,       delta:'exit signals',           cls:'down'},
+    {label:'Rugs blocked',     val:rugN,        delta:'auto-filtered',          cls: rugN>0?'down':'neutral'},
+    {label:'Est. win rate',    val:winEst+'%',  delta:'Tier A+B trades',        cls: winEst>=70?'up':winEst>=55?'warn':'down'},
   ].map(c=>`<div class="mc"><div class="ml">${c.label}</div><div class="mv ${c.cls}">${c.val}</div><div class="md">${c.delta}</div></div>`).join('');
 }
 
@@ -1210,9 +1210,13 @@ function renderTable() {
   const sortBy = document.getElementById('sortSel').value;
   let data = [...tokens];
 
-  // Default: show strong + buy only, hide rugged/flagged, min score 65
+  // Default: only show high confidence — score 75+, strong/buy signal, not flagged
   if (sigFilter==='all') {
-    data = data.filter(t => ['strong','buy'].includes(getSignal(t)) && getCompositeScore(t) >= 65 && !isFlagged(t));
+    data = data.filter(t => {
+      const s = getCompositeScore(t);
+      const sig = getSignal(t);
+      return s >= 75 && ['strong','buy'].includes(sig) && !isFlagged(t);
+    });
   } else if (sigFilter==='strong') {
     data = data.filter(t => getSignal(t)==='strong' && !isFlagged(t));
   } else if (sigFilter==='buy') {
@@ -1220,7 +1224,7 @@ function renderTable() {
   } else if (sigFilter==='sell') {
     data = data.filter(t => getSignal(t)==='sell');
   } else if (sigFilter==='all_raw') {
-    // show everything including holds
+    // show everything unfiltered
   }
   if (scoreFilter>0) data=data.filter(t=>getCompositeScore(t)>=scoreFilter);
   if (safeOnly) data=data.filter(t=>getSafetyScore(t)>=CFG.safeMin&&!isFlagged(t));
@@ -1247,6 +1251,7 @@ function renderTable() {
     const s   = getCompositeScore(t);
     const sig = getSignal(t);
     const ss  = getSafetyScore(t);
+    const ct  = getConfidenceTier(t);
     const {count, details, maxSignals} = countSignals(t);
     const vRisk = getVolatilityRisk(t);
     const vRiskHtml = vRisk==='high'
@@ -1274,6 +1279,8 @@ function renderTable() {
       : sig==='sell'
       ? `<span class="sig sig-sell"><span class="sdot" style="background:var(--red)"></span>SELL</span>`
       : `<span class="sig sig-hold"><span class="sdot" style="background:var(--text2)"></span>HOLD</span>`;
+
+    const tierHtml = `<div style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;background:${ct.bg};border:0.5px solid ${ct.border};color:${ct.color};white-space:nowrap;margin-top:4px">${ct.label}</div>`;
 
     const flagHtml = flag
       ? `<span style="font-size:10px;color:var(--red-l);display:block;margin-top:2px">⚠ ${flag}</span>` : '';
@@ -1327,7 +1334,7 @@ function renderTable() {
       </td>
       <td>${dotsHtml}</td>
       <td><span class="score-pill ${sc}">${s}</span></td>
-      <td>${sigHtml}</td>
+      <td>${sigHtml}<div>${tierHtml}</div></td>
       <td><a href="${t.url}" target="_blank" style="font-size:11px">↗</a></td>
     </tr>`;
   }).join('');
@@ -1858,6 +1865,9 @@ function setFilter(v){
   document.getElementById(m[v])?.classList.add('active');
   renderTable();
 }
+
+// Tier A filter = strong signal
+function setFilterTierA(){ setFilter('strong'); }
 function setScoreFilter(v){
   scoreFilter=v;
   ['fs0','fs60','fs75','fs90'].forEach(id=>document.getElementById(id).classList.remove('active'));
