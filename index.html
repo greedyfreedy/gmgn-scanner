@@ -738,36 +738,105 @@ function genMockPairs(count = 24) {
 /* ───────────────────────────────────────────────
    DATA FETCH
 ─────────────────────────────────────────────── */
+/* ── Token lists to search across ── */
+const SOLANA_TOKENS = [
+  /* Memecoins */
+  'BONK','WIF','POPCAT','MEW','MYRO','SLERF','BOME','SAMO','CWIF','GIGA',
+  'PUPS','CHONKY','SMOL','NOPE','TURBO','WOJAK','DEGEN','MICHI','MOODENG',
+  'GOAT','FWOG','MICHI','RETARDIO','PONKE','SIGMA','SELFIE','TREMP','LOCK',
+  /* DeFi / Infra */
+  'JTO','PYTH','MNDE','ORCA','RAY','JUP','DRIFT','ZEUS','CLOUD','RENDER',
+  'HNT','MOBILE','IOT','HONEY','SLIM','STEP','MEAN','TULIP','LARIX','PORT',
+  /* New / Trending */
+  'VINE','TRUMP','MELANIA','PENGU','AI16Z','ZEREBRO','FARTCOIN','BUTTHOLE',
+  'SWARMS','VIRTUAL','DEGENAI','GNON','LUNA','BASED','PNUT','ACT','KWEEN'
+];
+
+async function safeFetch(url) {
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  return null;
+}
+
 async function loadData() {
   document.getElementById('liveStatus').textContent = 'REFRESHING…';
-  let raw = [];
+  const raw = [];
+  const seen = new Set();
 
-  try {
-    const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111111111111112');
-    if (res.ok) {
-      const data = await res.json();
-      raw = (data.pairs || []).filter(p => p.chainId === 'solana');
-    }
-  } catch (_) {}
+  const addPairs = (pairs) => {
+    if (!Array.isArray(pairs)) return;
+    pairs
+      .filter(p => p.chainId === 'solana' && !seen.has(p.pairAddress))
+      .forEach(p => { seen.add(p.pairAddress); raw.push(p); });
+  };
 
-  if (raw.length < 5) {
-    for (const q of ['BONK','WIF','POPCAT','BOME','MEW']) {
-      try {
-        const r = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}%20SOL`);
-        if (r.ok) {
-          const d = await r.json();
-          raw.push(...(d.pairs || []).filter(p => p.chainId === 'solana'));
-        }
-      } catch (_) {}
+  /* ① Dexscreener trending tokens on Solana */
+  const trending = await safeFetch('https://api.dexscreener.com/token-boosts/top/v1');
+  if (trending) {
+    const solAddrs = (Array.isArray(trending) ? trending : [])
+      .filter(t => t.chainId === 'solana')
+      .map(t => t.tokenAddress)
+      .slice(0, 30);
+
+    /* Fetch pairs for each boosted token address in batches of 10 */
+    for (let i = 0; i < solAddrs.length; i += 10) {
+      const batch = solAddrs.slice(i, i + 10);
+      const d = await safeFetch(`https://api.dexscreener.com/latest/dex/tokens/${batch.join(',')}`);
+      if (d) addPairs(d.pairs);
     }
   }
 
-  const useMock = raw.length < 5;
-  document.getElementById('demoBanner').classList.toggle('visible', useMock);
-  document.getElementById('liveStatus').textContent = useMock ? 'DEMO MODE' : 'LIVE';
+  /* ② Latest/new pairs on Solana */
+  const latest = await safeFetch('https://api.dexscreener.com/token-profiles/latest/v1');
+  if (latest) {
+    const solAddrs = (Array.isArray(latest) ? latest : [])
+      .filter(t => t.chainId === 'solana')
+      .map(t => t.tokenAddress)
+      .slice(0, 20);
+    if (solAddrs.length) {
+      const d = await safeFetch(`https://api.dexscreener.com/latest/dex/tokens/${solAddrs.join(',')}`);
+      if (d) addPairs(d.pairs);
+    }
+  }
 
-  const deduped   = Array.from(new Map(raw.map(p => [p.pairAddress, p])).values());
-  const processed = processPairs(useMock ? genMockPairs() : deduped);
+  /* ③ Search for popular Solana tokens in parallel batches */
+  const searchBatches = [];
+  for (let i = 0; i < SOLANA_TOKENS.length; i += 6) {
+    searchBatches.push(SOLANA_TOKENS.slice(i, i + 6));
+  }
+
+  await Promise.allSettled(
+    searchBatches.map(async (batch) => {
+      const query = batch.join('%20');
+      const d = await safeFetch(`https://api.dexscreener.com/latest/dex/search?q=${query}`);
+      if (d) addPairs(d.pairs);
+    })
+  );
+
+  /* ④ Raydium & Orca top pools via pair search */
+  for (const dex of ['raydium','orca','meteora','jupiter']) {
+    const d = await safeFetch(`https://api.dexscreener.com/latest/dex/search?q=${dex}%20solana`);
+    if (d) addPairs(d.pairs);
+  }
+
+  /* ── Decide live vs demo ── */
+  const useMock = raw.length < 10;
+  document.getElementById('demoBanner').classList.toggle('visible', useMock);
+  document.getElementById('liveStatus').textContent = useMock ? 'DEMO MODE' : 'LIVE (' + raw.length + ')';
+
+  /* Filter to Solana-only, deduplicate, remove Wrapped SOL pairs */
+  const cleaned = raw.filter(p => {
+    const name = (p.baseToken?.name || '').toLowerCase();
+    const sym  = (p.baseToken?.symbol || '').toLowerCase();
+    /* exclude native wrapped SOL — it's not a token to trade */
+    if (sym === 'sol' && name.includes('wrapped')) return false;
+    if (p.baseToken?.address === 'So11111111111111111111111111111111111111112') return false;
+    return true;
+  });
+
+  const processed = processPairs(useMock ? genMockPairs() : cleaned);
 
   detectAlerts(processed);
   allProcessed = processed;
