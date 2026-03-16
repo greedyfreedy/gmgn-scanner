@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOL Intelligence — Solana Trading Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:     #07090f;
+    --bg2:    #0c1018;
+    --bg3:    #111827;
+    --bg4:    #1a2235;
+    --border: #1a2535;
+    --border2:#253348;
+    --text:   #c9d5e0;
+    --text2:  #7a90a8;
+    --text3:  #3d5268;
+    --green:  #00c97a;
+    --green2: #00ff88;
+    --greenb: rgba(0,201,122,0.12);
+    --buy:    #4ade80;
+    --buyb:   rgba(74,222,128,0.09);
+    --amber:  #f59e0b;
+    --amberb: rgba(245,158,11,0.1);
+    --sell:   #fb923c;
+    --sellb:  rgba(251,146,60,0.1);
+    --red:    #f43f5e;
+    --redb:   rgba(244,63,94,0.12);
+    --purple: #818cf8;
+    --purpleb:rgba(129,140,248,0.1);
+    --accent: #6366f1;
+    --mono:   'Space Mono', monospace;
+    --sans:   'Syne', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── SCROLLBAR ──────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ─── GRID BG ────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* ─── HEADER ─────────────────────────────────── */
+  .hdr {
+    position: sticky; top: 0; z-index: 60;
+    background: rgba(10,14,24,0.97);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(24px);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+
+  .logo { display: flex; align-items: center; gap: 12px; }
+
+  .logo-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--sans); font-size: 18px; font-weight: 800; color: #fff;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    font-family: var(--sans); font-size: 16px; font-weight: 800;
+    color: #f1f5f9; letter-spacing: -0.01em;
+  }
+
+  .logo-sub {
+    font-size: 9px; color: var(--text3); letter-spacing: 0.1em; margin-top: 2px;
+  }
+
+  .hdr-stats { display: flex; gap: 7px; flex-wrap: wrap; }
+
+  .stat-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg3);
+    font-size: 10px;
+  }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  .stat-label { color: var(--text3); letter-spacing: 0.05em; }
+  .stat-num { font-size: 14px; font-weight: 700; }
+
+  .hdr-right { display: flex; align-items: center; gap: 10px; }
+
+  .live-badge { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--green); letter-spacing: 0.08em; }
+
+  .pulse-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    animation: pulseAnim 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulseAnim {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.45; transform:scale(0.75); }
+  }
+
+  .btn {
+    background: var(--purpleb);
+    border: 1px solid rgba(129,140,248,0.3);
+    color: var(--purple);
+    border-radius: 6px; padding: 6px 14px;
+    cursor: pointer; font-size: 11px; font-family: var(--mono);
+    transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(129,140,248,0.2); }
+
+  .timestamp { font-size: 10px; color: var(--text3); }
+
+  /* ─── FILTERS ────────────────────────────────── */
+  .filters {
+    position: sticky; top: 64px; z-index: 50;
+    background: rgba(10,14,24,0.96);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    padding: 10px 24px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+
+  .f-label { font-size: 10px; color: var(--text3); letter-spacing: 0.08em; }
+
+  select, input[type="text"] {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 5px; padding: 5px 9px;
+    font-size: 11px; font-family: var(--mono); outline: none; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  select:hover, input[type="text"]:hover { border-color: var(--border2); }
+  input[type="text"] { width: 150px; }
+  input[type="text"]::placeholder { color: var(--text3); }
+
+  .toggle-btn {
+    padding: 5px 13px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--bg3);
+    color: var(--text2); font-size: 11px; cursor: pointer;
+    font-family: var(--mono); transition: all 0.15s;
+  }
+  .toggle-btn:hover { border-color: var(--border2); }
+  .toggle-btn.active {
+    background: var(--greenb);
+    border-color: rgba(0,201,122,0.35);
+    color: var(--green);
+  }
+
+  .filter-count { margin-left: auto; font-size: 10px; color: var(--text3); }
+
+  /* ─── SIGNAL TABS ────────────────────────────── */
+  .sig-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+    background: var(--bg2); padding: 0 24px; overflow-x: auto;
+    position: sticky; top: 112px; z-index: 49;
+  }
+  .sig-tabs::-webkit-scrollbar { display: none; }
+
+  .sig-tab {
+    padding: 10px 17px; font-size: 10px; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--text3);
+    white-space: nowrap; transition: all 0.15s; letter-spacing: 0.06em;
+    font-family: var(--mono); user-select: none;
+  }
+  .sig-tab:hover { color: var(--text2); }
+  .sig-tab.t-all   { } .sig-tab.t-all.active   { color: var(--purple); border-bottom-color: var(--purple); }
+  .sig-tab.t-sb    { } .sig-tab.t-sb.active    { color: var(--green2); border-bottom-color: var(--green2); }
+  .sig-tab.t-b     { } .sig-tab.t-b.active     { color: var(--buy);   border-bottom-color: var(--buy); }
+  .sig-tab.t-n     { } .sig-tab.t-n.active     { color: var(--text2); border-bottom-color: var(--text2); }
+  .sig-tab.t-s     { } .sig-tab.t-s.active     { color: var(--sell);  border-bottom-color: var(--sell); }
+  .sig-tab.t-ss    { } .sig-tab.t-ss.active    { color: var(--red);   border-bottom-color: var(--red); }
+
+  /* ─── MAIN CONTENT ───────────────────────────── */
+  .main-wrap {
+    position: relative; z-index: 1;
+    transition: padding-right 0.28s ease;
+  }
+  .main-wrap.panel-open { padding-right: 420px; }
+
+  /* ─── TABLE ──────────────────────────────────── */
+  .tbl-outer { overflow-x: auto; }
+
+  table {
+    width: 100%; border-collapse: collapse; min-width: 1080px;
+  }
+
+  thead th {
+    padding: 9px 16px; font-size: 10px; color: var(--text3);
+    letter-spacing: 0.08em; background: rgba(17,24,39,0.8);
+    border-bottom: 1px solid var(--border);
+    text-align: left; white-space: nowrap; font-weight: 400;
+    position: sticky; top: 148px; z-index: 40;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(26,37,53,0.7);
+    cursor: pointer; transition: background 0.1s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.015); }
+  tbody tr.selected { background: rgba(99,102,241,0.07); }
+
+  tbody td { padding: 11px 16px; vertical-align: middle; }
+
+  .t-name { font-family: var(--sans); font-size: 13px; font-weight: 700; color: #f1f5f9; }
+  .t-sym  { font-size: 10px; color: var(--text3); margin-top: 1px; }
+  .t-dex  { font-size: 9px;  color: var(--text3); margin-top: 1px; }
+
+  /* SIGNAL BADGE */
+  .sig-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 5px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+    white-space: nowrap; border: 1px solid transparent;
+  }
+  .sig-SB  { color: var(--green2); background: var(--greenb); border-color: rgba(0,255,136,0.3); }
+  .sig-B   { color: var(--buy);   background: var(--buyb);   border-color: rgba(74,222,128,0.25); }
+  .sig-N   { color: var(--text2); background: rgba(122,144,168,0.07); border-color: rgba(122,144,168,0.18); }
+  .sig-S   { color: var(--sell);  background: var(--sellb);  border-color: rgba(251,146,60,0.25); }
+  .sig-SS  { color: var(--red);   background: var(--redb);   border-color: rgba(244,63,94,0.3); }
+
+  .pct-pos { color: var(--buy); font-size: 11px; }
+  .pct-neg { color: var(--red); font-size: 11px; }
+  .pct-neu { color: var(--text3); font-size: 11px; }
+
+  .price-cell { font-size: 12px; color: #e2e8f0; }
+
+  /* SCORE BAR */
+  .sbar { width: 82px; }
+  .sbar-track { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; margin-bottom: 3px; }
+  .sbar-fill  { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+  .sbar-val   { font-size: 10px; }
+
+  .struct-cell { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
+
+  /* ADDR */
+  .addr-btn {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text3); border-radius: 4px; padding: 2px 7px;
+    font-size: 10px; cursor: pointer; font-family: var(--mono);
+    transition: all 0.12s;
+  }
+  .addr-btn:hover { border-color: var(--border2); color: var(--text2); }
+
+  .chart-link {
+    background: var(--purpleb); border: 1px solid rgba(129,140,248,0.25);
+    color: var(--purple); border-radius: 4px; padding: 2px 8px;
+    font-size: 10px; text-decoration: none; display: inline-block;
+    font-family: var(--mono); transition: background 0.12s;
+  }
+  .chart-link:hover { background: rgba(129,140,248,0.2); }
+
+  /* ─── EMPTY / LOADING ────────────────────────── */
+  .state-msg {
+    padding: 70px 24px; text-align: center; color: var(--text3); font-size: 12px;
+  }
+  .spin-icon {
+    font-size: 32px; display: inline-block; margin-bottom: 14px;
+    animation: spinAnim 1.2s linear infinite;
+  }
+  @keyframes spinAnim { to { transform: rotate(360deg); } }
+
+  /* ─── DETAIL PANEL ───────────────────────────── */
+  .panel-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 90; display: none; backdrop-filter: blur(2px);
+  }
+  .panel-overlay.open { display: block; }
+
+  .detail-panel {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 420px;
+    background: rgba(9,13,21,0.99);
+    border-left: 1px solid var(--border);
+    z-index: 95; overflow-y: auto;
+    padding: 22px 20px;
+    display: flex; flex-direction: column; gap: 15px;
+    transform: translateX(105%);
+    transition: transform 0.26s cubic-bezier(0.16,1,0.3,1);
+  }
+  .detail-panel.open { transform: translateX(0); }
+
+  .dp-hdr { display: flex; justify-content: space-between; align-items: flex-start; }
+  .dp-name { font-family: var(--sans); font-size: 20px; font-weight: 800; color: #f1f5f9; margin-bottom: 4px; }
+  .dp-meta { font-size: 10px; color: var(--text3); letter-spacing: 0.05em; }
+
+  .dp-close {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    color: var(--text2); border-radius: 5px; padding: 5px 11px;
+    cursor: pointer; font-size: 18px; line-height: 1; flex-shrink: 0;
+    transition: background 0.12s;
+  }
+  .dp-close:hover { background: rgba(255,255,255,0.1); }
+
+  .dp-card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 9px; padding: 14px;
+  }
+  .dp-card-label {
+    font-size: 10px; color: var(--text3); letter-spacing: 0.08em; margin-bottom: 10px;
+  }
+
+  .dp-signal-wrap { text-align: center; padding: 6px 0 4px; }
+  .dp-signal-wrap .sig-badge { font-size: 12px !important; padding: 6px 18px !important; }
+  .dp-struct { font-size: 11px; color: var(--text3); margin-top: 8px; }
+
+  .dp-price { font-family: var(--sans); font-size: 28px; font-weight: 800; color: #f1f5f9; margin-bottom: 12px; }
+
+  .dp-pct-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; text-align: center; }
+  .dp-pct-item .lbl { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+
+  .dp-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dp-stat {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 10px 12px;
+  }
+  .dp-stat .lbl { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+  .dp-stat .val { font-size: 13px; color: #e2e8f0; font-weight: 600; }
+
+  .pressure-track {
+    height: 8px; background: rgba(244,63,94,0.2);
+    border-radius: 4px; overflow: hidden; margin: 8px 0;
+  }
+  .pressure-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--buy), var(--green2));
+    transition: width 0.5s ease;
+  }
+  .pressure-labels { display: flex; justify-content: space-between; font-size: 10px; }
+
+  .addr-wrap { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; }
+  .addr-code {
+    font-size: 10px; color: var(--text2); flex: 1;
+    word-break: break-all; font-family: var(--mono); line-height: 1.6;
+  }
+
+  .copy-btn {
+    background: var(--purpleb); border: 1px solid rgba(129,140,248,0.3);
+    color: var(--purple); border-radius: 5px; padding: 5px 10px;
+    cursor: pointer; font-size: 10px; white-space: nowrap;
+    font-family: var(--mono); transition: all 0.12s; flex-shrink: 0;
+  }
+  .copy-btn:hover { background: rgba(129,140,248,0.2); }
+
+  .open-chart-link {
+    display: block; text-align: center; padding: 13px;
+    background: var(--purpleb); border: 1px solid rgba(129,140,248,0.3);
+    border-radius: 9px; color: var(--purple); text-decoration: none;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    transition: background 0.12s;
+  }
+  .open-chart-link:hover { background: rgba(129,140,248,0.2); }
+
+  .dp-score-row { margin-bottom: 10px; }
+  .dp-score-row:last-child { margin-bottom: 0; }
+  .dp-score-label { font-size: 10px; color: var(--text3); margin-bottom: 5px; }
+  .dp-score-bar-wrap { display: flex; align-items: center; gap: 9px; }
+  .dp-score-track { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+  .dp-score-fill  { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .dp-score-val   { font-size: 12px; font-weight: 700; min-width: 22px; text-align: right; }
+
+  .mock-note { font-size: 10px; color: var(--text3); text-align: center; padding: 4px 0; }
+
+  /* ─── ALERTS ─────────────────────────────────── */
+  .alerts-area {
+    position: fixed; bottom: 20px; right: 20px;
+    z-index: 200; display: flex; flex-direction: column; gap: 8px;
+    max-width: 300px;
+  }
+
+  .alert-toast {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 14px;
+    cursor: pointer; animation: slideUp 0.3s ease;
+    transition: border-color 0.12s;
+  }
+  .alert-toast:hover { border-color: var(--border2); }
+  @keyframes slideUp {
+    from { transform: translateY(18px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .a-type   { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; margin-bottom: 3px; }
+  .a-token  { font-size: 12px; color: var(--text); }
+  .a-detail { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* ─── FOOTER ─────────────────────────────────── */
+  .footer {
+    border-top: 1px solid var(--border); padding: 14px 24px;
+    display: flex; justify-content: space-between; font-size: 10px;
+    color: var(--text3); position: relative; z-index: 1;
+  }
+
+  /* ─── DEMO BANNER ────────────────────────────── */
+  .demo-banner {
+    background: rgba(245,158,11,0.06); border-bottom: 1px solid rgba(245,158,11,0.15);
+    padding: 7px 24px; font-size: 11px; color: var(--amber);
+    display: none; position: relative; z-index: 2;
+  }
+  .demo-banner.visible { display: block; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="logo">
+    <div class="logo-icon">◎</div>
+    <div>
+      <div class="logo-text">SOL Intelligence</div>
+      <div class="logo-sub">SOLANA TRADING DASHBOARD</div>
+    </div>
+  </div>
+  <div class="hdr-stats" id="hdrStats">
+    <!-- populated by JS -->
+  </div>
+  <div class="hdr-right">
+    <div class="live-badge">
+      <div class="pulse-dot"></div>
+      <span id="liveStatus">LOADING</span>
+    </div>
+    <button class="btn" onclick="loadData()">↻ Refresh</button>
+    <span class="timestamp" id="lastUpdated">—</span>
+  </div>
+</header>
+
+<!-- DEMO BANNER -->
+<div class="demo-banner" id="demoBanner">
+  ⚠ &nbsp; Demo mode — displaying simulated data. Live data loads when Dexscreener API is reachable.
+</div>
+
+<!-- FILTERS -->
+<div class="filters">
+  <span class="f-label">SEARCH</span>
+  <input type="text" id="searchQ" placeholder="Token name / symbol…" oninput="renderTable()">
+
+  <span class="f-label">MIN LIQ</span>
+  <select id="minLiq" onchange="renderTable()">
+    <option value="50000">$50K+</option>
+    <option value="100000">$100K+</option>
+    <option value="250000">$250K+</option>
+    <option value="500000">$500K+</option>
+    <option value="1000000">$1M+</option>
+  </select>
+
+  <span class="f-label">WHALE</span>
+  <select id="minWhale" onchange="renderTable()">
+    <option value="0">Any</option>
+    <option value="30">30+</option>
+    <option value="50">50+</option>
+    <option value="70">70+</option>
+  </select>
+
+  <span class="f-label">SAFETY</span>
+  <select id="minSafety" onchange="renderTable()">
+    <option value="0">Any</option>
+    <option value="40">40+</option>
+    <option value="60">60+</option>
+    <option value="75">75+</option>
+  </select>
+
+  <button class="toggle-btn" id="hcToggle" onclick="toggleHC()">⬡ High Confidence</button>
+
+  <div class="filter-count" id="filterCount">— tokens</div>
+</div>
+
+<!-- SIGNAL TABS -->
+<div class="sig-tabs">
+  <div class="sig-tab t-all active" data-sig="ALL"         onclick="setSigFilter('ALL',this)">ALL SIGNALS</div>
+  <div class="sig-tab t-sb"         data-sig="STRONG BUY"  onclick="setSigFilter('STRONG BUY',this)">⬆⬆ STRONG BUY</div>
+  <div class="sig-tab t-b"          data-sig="BUY"         onclick="setSigFilter('BUY',this)">⬆ BUY</div>
+  <div class="sig-tab t-n"          data-sig="NEUTRAL"     onclick="setSigFilter('NEUTRAL',this)">→ NEUTRAL</div>
+  <div class="sig-tab t-s"          data-sig="SELL"        onclick="setSigFilter('SELL',this)">⬇ SELL</div>
+  <div class="sig-tab t-ss"         data-sig="STRONG SELL" onclick="setSigFilter('STRONG SELL',this)">⬇⬇ STRONG SELL</div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main-wrap" id="mainWrap">
+  <div class="tbl-outer">
+    <table id="mainTable">
+      <thead>
+        <tr>
+          <th>TOKEN</th>
+          <th>SIGNAL</th>
+          <th>PRICE</th>
+          <th>CHANGE</th>
+          <th>LIQUIDITY</th>
+          <th>VOLUME 24H</th>
+          <th>WHALE SCORE</th>
+          <th>SAFETY SCORE</th>
+          <th>STRUCTURE</th>
+          <th>AGE</th>
+          <th>ADDRESS / CHART</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="state-msg" id="loadingState">
+      <div class="spin-icon">◎</div><br>
+      Loading Solana token intelligence…
+    </div>
+    <div class="state-msg" id="emptyState" style="display:none">
+      No tokens match current filters
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>◎ SOL Intelligence · Auto-refreshes every 30s · Data: Dexscreener API</span>
+    <span>Not financial advice — for educational purposes only</span>
+  </div>
+</div>
+
+<!-- DETAIL PANEL OVERLAY -->
+<div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-panel" id="detailPanel">
+  <div id="panelContent"></div>
+</div>
+
+<!-- ALERTS -->
+<div class="alerts-area" id="alertsArea"></div>
+
+<script>
+/* ───────────────────────────────────────────────
+   STATE
+─────────────────────────────────────────────── */
+let allProcessed  = [];
+let selectedIdx   = null;
+let sigFilter     = 'ALL';
+let hcOnly        = false;
+let alertsList    = [];
+let prevSignalMap = {};
+
+/* ───────────────────────────────────────────────
+   FORMAT HELPERS
+─────────────────────────────────────────────── */
+const fmtPrice = n => {
+  if (!n) return '$0';
+  if (n < 0.000001) return '$' + n.toExponential(2);
+  if (n < 0.01)     return '$' + n.toFixed(6);
+  if (n < 1)        return '$' + n.toFixed(4);
+  return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+const fmtLiq = n => {
+  if (!n) return '$0';
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+  return '$' + Math.round(n);
+};
+const fmtPct = n => {
+  if (n == null) return '—';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+};
+const fmtAddr = a => a ? a.slice(0, 4) + '…' + a.slice(-4) : '—';
+const fmtAge  = ts => {
+  const ms = Date.now() - ts;
+  const d  = Math.floor(ms / 86400000);
+  const h  = Math.floor((ms % 86400000) / 3600000);
+  return d > 0 ? d + 'd ' + h + 'h' : h + 'h';
+};
+
+/* ───────────────────────────────────────────────
+   SCORING ENGINE
+─────────────────────────────────────────────── */
+function whaleScore(p) {
+  let s = 0;
+  const vol  = p.volume?.h24   || 0;
+  const liq  = p.liquidity?.usd || 1;
+  const buys = p.txns?.h24?.buys || 0;
+  const sells= p.txns?.h24?.sells|| 0;
+
+  const vl = vol / liq;
+  if (vl > 5) s += 30; else if (vl > 2) s += 20; else if (vl > 1) s += 10;
+
+  const tot = buys + sells;
+  const bp  = tot > 0 ? buys / tot : 0.5;
+  if (bp > 0.7) s += 25; else if (bp > 0.6) s += 15; else if (bp > 0.5) s += 5;
+
+  const v1h = p.volume?.h1 || 0;
+  const avg = vol / 24;
+  if (v1h > avg * 3) s += 25; else if (v1h > avg * 2) s += 15; else if (v1h > avg) s += 5;
+
+  const p5m = p.priceChange?.m5 || 0;
+  const p1h = p.priceChange?.h1 || 0;
+  if (p5m > 0 && p1h > 0) s += 10;
+  if (p5m > 2 && p1h > 5) s += 10;
+
+  return Math.min(100, s);
+}
+
+function safetyScore(p) {
+  let s = 50;
+  const liq = p.liquidity?.usd || 0;
+  const age = p.pairCreatedAt ? (Date.now() - p.pairCreatedAt) : 0;
+  const vol = p.volume?.h24 || 0;
+
+  if (liq > 500000) s += 20; else if (liq > 200000) s += 15;
+  else if (liq > 100000) s += 10; else if (liq > 50000) s += 5; else s -= 20;
+
+  const ad = age / 86400000;
+  if (ad > 30) s += 15; else if (ad > 7) s += 10; else if (ad > 1) s += 5; else s -= 15;
+
+  if (vol > 1000000) s += 10; else if (vol > 500000) s += 5;
+
+  const p24h = Math.abs(p.priceChange?.h24 || 0);
+  if (p24h > 500) s -= 20; else if (p24h > 200) s -= 10;
+
+  const buys = p.txns?.h24?.buys || 0, sells = p.txns?.h24?.sells || 0;
+  const tot  = buys + sells;
+  if (tot > 0) {
+    const br = buys / tot;
+    if (br > 0.95) s -= 10;
+    if (br < 0.20) s -= 15;
+  }
+
+  return Math.max(0, Math.min(100, s));
+}
+
+function priceStructure(p) {
+  const m5  = p.priceChange?.m5  || 0;
+  const h1  = p.priceChange?.h1  || 0;
+  const h6  = p.priceChange?.h6  || 0;
+  const h24 = p.priceChange?.h24 || 0;
+  const pos = [h24 > 0, h6 > 0, h1 > 0, m5 > 0].filter(Boolean).length;
+  if (pos === 4) return 'HH→HL';
+  if (pos === 3) return 'HL forming';
+  if (pos === 2) return 'Mixed';
+  if (pos === 1) return 'LH→LL';
+  return 'LL→LH';
+}
+
+function computeSignal(p) {
+  const ws = p._whale, ss = p._safety, st = p._structure;
+  const liq = p.liquidity?.usd || 0;
+  const vol = p.volume?.h24    || 0;
+  const p1h = p.priceChange?.h1 || 0;
+  const v1h = p.volume?.h1     || 0;
+  const avg = vol / 24;
+  const va  = v1h > avg * 1.5;
+
+  if (ws >= 65 && ss >= 65 && st === 'HH→HL' && va)                                          return 'STRONG BUY';
+  if (ws >= 45 && ss >= 55 && (st === 'HH→HL' || st === 'HL forming') && p1h > 0)           return 'BUY';
+  if ((st === 'LL→LH' || st === 'LH→LL') && ws < 30 && ss < 40)                             return 'STRONG SELL';
+  if (liq < 30000 && vol < 50000)                                                             return 'STRONG SELL';
+  if (st === 'LH→LL' || ((p.priceChange?.h24 || 0) < -20 && p1h < -5))                      return 'SELL';
+  if (ws < 30 && p1h < -5)                                                                    return 'SELL';
+  return 'NEUTRAL';
+}
+
+function processPairs(raw) {
+  const out = raw
+    .filter(p => {
+      if ((p.liquidity?.usd   || 0) < 50000)   return false;
+      if ((p.volume?.h24      || 0) < 100000)  return false;
+      if (!p.pairCreatedAt)                     return false;
+      if ((Date.now() - p.pairCreatedAt) < 86400000) return false;
+      return true;
+    })
+    .map(p => ({
+      ...p,
+      _whale:     whaleScore(p),
+      _safety:    safetyScore(p),
+      _structure: priceStructure(p),
+    }))
+    .map(p => ({ ...p, _signal: computeSignal(p) }));
+
+  const ORDER = { 'STRONG BUY': 0, 'BUY': 1, 'NEUTRAL': 2, 'SELL': 3, 'STRONG SELL': 4 };
+  out.sort((a, b) => (ORDER[a._signal] ?? 2) - (ORDER[b._signal] ?? 2));
+  return out;
+}
+
+/* ───────────────────────────────────────────────
+   MOCK DATA
+─────────────────────────────────────────────── */
+function genMockPairs(count = 24) {
+  const tokens = [
+    ['Bonk','BONK'],['dogwifhat','WIF'],['Popcat','POPCAT'],['MEW','MEW'],
+    ['Myro','MYRO'],['Slerf','SLERF'],['Book of Meme','BOME'],['Samoyedcoin','SAMO'],
+    ['Catwifhat','CWIF'],['Hamster Kombat','HAMS'],['Gigachad','GIGA'],['Pups World Peace','PUPS'],
+    ['Chonky Cat','CHONK'],['Smol Brain','SMOL'],['Pepe Sol','PSOL'],
+    ['Wojak Finance','WOJAK'],['Degen','DEGEN'],['Nope Finance','NOPE'],
+    ['Turbo Token','TURBO'],['Jito','JTO'],['Pyth Network','PYTH'],
+    ['Marinade','MNDE'],['Orca','ORCA'],['Raydium','RAY'],
+  ].slice(0, count);
+
+  const dexes  = ['raydium','orca','jupiter','meteora'];
+  const chars  = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const randId = () => Array.from({ length: 44 }, () => chars[Math.floor(Math.random() * 58)]).join('');
+  const rnd    = (a, b) => a + Math.random() * (b - a);
+
+  return tokens.map(([name, sym]) => {
+    const liq  = rnd(60000, 3500000);
+    const vol24= rnd(120000, 9000000);
+    const age  = rnd(1.2, 90) * 86400000;
+    const buys = Math.floor(rnd(300, 4000));
+    const sells= Math.floor(rnd(150, 2500));
+    return {
+      pairAddress: randId(),
+      baseToken:   { address: randId(), name, symbol: sym },
+      quoteToken:  { symbol: 'SOL' },
+      priceUsd:    String(rnd(0.00005, 0.8)),
+      liquidity:   { usd: liq },
+      volume:      { h24: vol24, h6: vol24 * rnd(0.3, 0.5), h1: vol24 * rnd(0.03, 0.12) },
+      txns:        { h24: { buys, sells } },
+      priceChange: { m5: rnd(-9, 14), h1: rnd(-18, 24), h6: rnd(-28, 45), h24: rnd(-45, 90) },
+      pairCreatedAt: Date.now() - age,
+      chainId: 'solana',
+      dexId:   dexes[Math.floor(Math.random() * 4)],
+      url:     'https://dexscreener.com/solana/' + randId(),
+      _mock:   true,
+    };
+  });
+}
+
+/* ───────────────────────────────────────────────
+   DATA FETCH
+─────────────────────────────────────────────── */
+async function loadData() {
+  document.getElementById('liveStatus').textContent = 'REFRESHING…';
+  let raw = [];
+
+  try {
+    const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111111111111112');
+    if (res.ok) {
+      const data = await res.json();
+      raw = (data.pairs || []).filter(p => p.chainId === 'solana');
+    }
+  } catch (_) {}
+
+  if (raw.length < 5) {
+    for (const q of ['BONK','WIF','POPCAT','BOME','MEW']) {
+      try {
+        const r = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}%20SOL`);
+        if (r.ok) {
+          const d = await r.json();
+          raw.push(...(d.pairs || []).filter(p => p.chainId === 'solana'));
+        }
+      } catch (_) {}
+    }
+  }
+
+  const useMock = raw.length < 5;
+  document.getElementById('demoBanner').classList.toggle('visible', useMock);
+  document.getElementById('liveStatus').textContent = useMock ? 'DEMO MODE' : 'LIVE';
+
+  const deduped   = Array.from(new Map(raw.map(p => [p.pairAddress, p])).values());
+  const processed = processPairs(useMock ? genMockPairs() : deduped);
+
+  detectAlerts(processed);
+  allProcessed = processed;
+  updateHeaderStats();
+  renderTable();
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+/* ───────────────────────────────────────────────
+   RENDER HELPERS
+─────────────────────────────────────────────── */
+function sigClass(s) {
+  return { 'STRONG BUY': 'sig-SB', 'BUY': 'sig-B', 'SELL': 'sig-S', 'STRONG SELL': 'sig-SS' }[s] || 'sig-N';
+}
+function sigIcon(s) {
+  return { 'STRONG BUY': '⬆⬆ ', 'BUY': '⬆ ', 'SELL': '⬇ ', 'STRONG SELL': '⬇⬇ ' }[s] || '→ ';
+}
+function structColor(s) {
+  if (s === 'HH→HL')     return '#4ade80';
+  if (s === 'HL forming') return '#86efac';
+  if (s === 'LH→LL' || s === 'LL→LH') return '#f43f5e';
+  return '#7a90a8';
+}
+function scoreColor(v) {
+  return v >= 70 ? '#00c97a' : v >= 45 ? '#f59e0b' : '#f43f5e';
+}
+function pctHtml(v) {
+  const cls = v > 0 ? 'pct-pos' : v < 0 ? 'pct-neg' : 'pct-neu';
+  return `<span class="${cls}">${fmtPct(v)}</span>`;
+}
+function scoreBarHtml(val) {
+  const c = scoreColor(val);
+  return `<div class="sbar">
+    <div class="sbar-track"><div class="sbar-fill" style="width:${val}%;background:${c}"></div></div>
+    <div class="sbar-val" style="color:${c}">${val}</div>
+  </div>`;
+}
+
+/* ───────────────────────────────────────────────
+   RENDER TABLE
+─────────────────────────────────────────────── */
+function renderTable() {
+  const searchQ   = document.getElementById('searchQ').value.toLowerCase();
+  const minLiq    = +document.getElementById('minLiq').value;
+  const minWhale  = +document.getElementById('minWhale').value;
+  const minSafety = +document.getElementById('minSafety').value;
+
+  const filtered = allProcessed.filter(t => {
+    if ((t.liquidity?.usd || 0) < minLiq)   return false;
+    if (t._whale   < minWhale)               return false;
+    if (t._safety  < minSafety)              return false;
+    if (hcOnly && t._signal !== 'STRONG BUY' && t._signal !== 'BUY') return false;
+    if (sigFilter !== 'ALL' && t._signal !== sigFilter)               return false;
+    if (searchQ) {
+      const n = (t.baseToken?.name   || '').toLowerCase();
+      const s = (t.baseToken?.symbol || '').toLowerCase();
+      if (!n.includes(searchQ) && !s.includes(searchQ)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('filterCount').textContent = filtered.length + ' tokens';
+  document.getElementById('loadingState').style.display = 'none';
+
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(t => {
+    const gIdx = allProcessed.indexOf(t);
+    const name  = t.baseToken?.name   || 'Unknown';
+    const sym   = t.baseToken?.symbol || '?';
+    const price = parseFloat(t.priceUsd || 0);
+    const addr  = t.baseToken?.address || '';
+    const p1h   = t.priceChange?.h1  || 0;
+    const p24h  = t.priceChange?.h24 || 0;
+    const age   = t.pairCreatedAt ? fmtAge(t.pairCreatedAt) : '—';
+    const sc    = sigClass(t._signal);
+    const isSelected = selectedIdx === gIdx;
+
+    return `<tr class="${isSelected ? 'selected' : ''}" onclick="openDetail(${gIdx})">
+      <td>
+        <div class="t-name">${name}</div>
+        <div class="t-sym">${sym}</div>
+        <div class="t-dex">${t.dexId || 'DEX'}</div>
+      </td>
+      <td><span class="sig-badge ${sc}">${sigIcon(t._signal)}${t._signal}</span></td>
+      <td><span class="price-cell">${fmtPrice(price)}</span></td>
+      <td>
+        <div>${pctHtml(p1h)} <span style="color:var(--text3);font-size:10px">1h</span></div>
+        <div>${pctHtml(p24h)} <span style="color:var(--text3);font-size:10px">24h</span></div>
+      </td>
+      <td style="color:var(--text2);font-size:12px">${fmtLiq(t.liquidity?.usd || 0)}</td>
+      <td style="color:var(--text2);font-size:12px">${fmtLiq(t.volume?.h24    || 0)}</td>
+      <td>${scoreBarHtml(t._whale)}</td>
+      <td>${scoreBarHtml(t._safety)}</td>
+      <td><span class="struct-cell" style="color:${structColor(t._structure)}">${t._structure}</span></td>
+      <td style="color:var(--text2);font-size:11px">${age}</td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <button class="addr-btn" onclick="copyAddrBtn(event,'${addr}')">${fmtAddr(addr)}</button>
+          ${t.url ? `<a class="chart-link" href="${t.url}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Chart ↗</a>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ───────────────────────────────────────────────
+   HEADER STATS
+─────────────────────────────────────────────── */
+function updateHeaderStats() {
+  const c = { SB: 0, B: 0, N: 0, S: 0, SS: 0 };
+  allProcessed.forEach(t => {
+    if      (t._signal === 'STRONG BUY')  c.SB++;
+    else if (t._signal === 'BUY')         c.B++;
+    else if (t._signal === 'NEUTRAL')     c.N++;
+    else if (t._signal === 'SELL')        c.S++;
+    else if (t._signal === 'STRONG SELL') c.SS++;
+  });
+
+  document.getElementById('hdrStats').innerHTML = [
+    { label: 'STRONG BUY',  n: c.SB, color: 'var(--green2)' },
+    { label: 'BUY',         n: c.B,  color: 'var(--buy)'    },
+    { label: 'NEUTRAL',     n: c.N,  color: 'var(--text2)'  },
+    { label: 'SELL',        n: c.S,  color: 'var(--sell)'   },
+    { label: 'STRONG SELL', n: c.SS, color: 'var(--red)'    },
+  ].map(x => `
+    <div class="stat-pill">
+      <div class="dot" style="background:${x.color}"></div>
+      <span class="stat-label">${x.label}</span>
+      <span class="stat-num" style="color:${x.color}">${x.n}</span>
+    </div>`).join('');
+}
+
+/* ───────────────────────────────────────────────
+   DETAIL PANEL
+─────────────────────────────────────────────── */
+function openDetail(idx) {
+  selectedIdx = idx;
+  renderTable();
+
+  const t = allProcessed[idx];
+  if (!t) return;
+
+  const name   = t.baseToken?.name   || 'Unknown';
+  const sym    = t.baseToken?.symbol || '?';
+  const price  = parseFloat(t.priceUsd || 0);
+  const liq    = t.liquidity?.usd || 0;
+  const vol    = t.volume?.h24    || 0;
+  const buys   = t.txns?.h24?.buys  || 0;
+  const sells  = t.txns?.h24?.sells || 0;
+  const buyPct = (buys + sells > 0) ? Math.round(buys / (buys + sells) * 100) : 50;
+  const addr   = t.baseToken?.address || '';
+  const dexUrl = t.url || ('https://dexscreener.com/solana/' + (t.pairAddress || ''));
+  const age    = t.pairCreatedAt ? fmtAge(t.pairCreatedAt) : '—';
+  const sc     = sigClass(t._signal);
+
+  const wc = scoreColor(t._whale);
+  const sc2= scoreColor(t._safety);
+
+  document.getElementById('panelContent').innerHTML = `
+    <div class="dp-hdr">
+      <div>
+        <div class="dp-name">${name}</div>
+        <div class="dp-meta">${sym} &nbsp;·&nbsp; ${t.dexId || 'DEX'} &nbsp;·&nbsp; SOLANA</div>
+      </div>
+      <button class="dp-close" onclick="closePanel()">×</button>
+    </div>
+
+    <div class="dp-card dp-signal-wrap">
+      <span class="sig-badge ${sc}" style="font-size:12px;padding:7px 20px">${sigIcon(t._signal)}${t._signal}</span>
+      <div class="dp-struct">Price Structure: <strong style="color:${structColor(t._structure)}">${t._structure}</strong></div>
+    </div>
+
+    <div class="dp-card">
+      <div class="dp-price">${fmtPrice(price)}</div>
+      <div class="dp-pct-grid">
+        ${[['5m', t.priceChange?.m5], ['1h', t.priceChange?.h1], ['6h', t.priceChange?.h6], ['24h', t.priceChange?.h24]].map(([l, v]) => `
+          <div class="dp-pct-item"><div class="lbl">${l}</div>${pctHtml(v || 0)}</div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="dp-card">
+      <div class="dp-card-label">INTELLIGENCE SCORES</div>
+      <div class="dp-score-row">
+        <div class="dp-score-label">WHALE SCORE</div>
+        <div class="dp-score-bar-wrap">
+          <div class="dp-score-track"><div class="dp-score-fill" style="width:${t._whale}%;background:${wc}"></div></div>
+          <span class="dp-score-val" style="color:${wc}">${t._whale}</span>
+        </div>
+      </div>
+      <div class="dp-score-row">
+        <div class="dp-score-label">SAFETY SCORE</div>
+        <div class="dp-score-bar-wrap">
+          <div class="dp-score-track"><div class="dp-score-fill" style="width:${t._safety}%;background:${sc2}"></div></div>
+          <span class="dp-score-val" style="color:${sc2}">${t._safety}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dp-stat-grid">
+      ${[
+        ['Liquidity',    fmtLiq(liq)],
+        ['24h Volume',   fmtLiq(vol)],
+        ['Buys (24h)',   buys.toLocaleString()],
+        ['Sells (24h)',  sells.toLocaleString()],
+        ['Token Age',    age],
+        ['DEX',          t.dexId || '—'],
+      ].map(([l, v]) => `
+        <div class="dp-stat"><div class="lbl">${l}</div><div class="val">${v}</div></div>
+      `).join('')}
+    </div>
+
+    <div class="dp-card">
+      <div class="dp-card-label">BUY / SELL PRESSURE</div>
+      <div class="pressure-track"><div class="pressure-fill" style="width:${buyPct}%"></div></div>
+      <div class="pressure-labels">
+        <span style="color:var(--buy)">BUY ${buyPct}%</span>
+        <span style="color:var(--red)">SELL ${100 - buyPct}%</span>
+      </div>
+    </div>
+
+    <div class="dp-card">
+      <div class="dp-card-label">CONTRACT ADDRESS</div>
+      <div class="addr-wrap">
+        <code class="addr-code">${addr || 'N/A'}</code>
+        <button class="copy-btn" id="panelCopyBtn" onclick="copyPanelAddr('${addr}')">Copy</button>
+      </div>
+    </div>
+
+    <a class="open-chart-link" href="${dexUrl}" target="_blank" rel="noreferrer">Open Chart on Dexscreener ↗</a>
+
+    ${t._mock ? '<div class="mock-note">⚠ Demo data · Live data loads when API is reachable</div>' : ''}
+  `;
+
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('panelOverlay').classList.add('open');
+  document.getElementById('mainWrap').classList.add('panel-open');
+}
+
+function closePanel() {
+  selectedIdx = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.getElementById('mainWrap').classList.remove('panel-open');
+  renderTable();
+}
+
+/* ───────────────────────────────────────────────
+   COPY HELPERS
+─────────────────────────────────────────────── */
+function copyAddrBtn(e, addr) {
+  e.stopPropagation();
+  navigator.clipboard?.writeText(addr).catch(() => {});
+  const btn = e.currentTarget;
+  btn.textContent = '✓ Copied';
+  setTimeout(() => { btn.textContent = fmtAddr(addr); }, 2000);
+}
+
+function copyPanelAddr(addr) {
+  navigator.clipboard?.writeText(addr).catch(() => {});
+  const btn = document.getElementById('panelCopyBtn');
+  if (btn) {
+    btn.textContent = '✓ Copied';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 2000);
+  }
+}
+
+/* ───────────────────────────────────────────────
+   SIGNAL TABS
+─────────────────────────────────────────────── */
+function setSigFilter(sig, el) {
+  sigFilter = sig;
+  document.querySelectorAll('.sig-tab').forEach(t => {
+    t.classList.remove('active');
+    if (t.dataset.sig === sig) t.classList.add('active');
+  });
+  renderTable();
+}
+
+/* ───────────────────────────────────────────────
+   HIGH CONFIDENCE TOGGLE
+─────────────────────────────────────────────── */
+function toggleHC() {
+  hcOnly = !hcOnly;
+  document.getElementById('hcToggle').classList.toggle('active', hcOnly);
+  renderTable();
+}
+
+/* ───────────────────────────────────────────────
+   ALERTS
+─────────────────────────────────────────────── */
+function detectAlerts(tokens) {
+  tokens.forEach(t => {
+    const name = t.baseToken?.name || t.baseToken?.symbol || 'Token';
+    const prev = prevSignalMap[t.pairAddress];
+    if (t._signal === 'STRONG BUY' && prev !== 'STRONG BUY') {
+      pushAlert('STRONG BUY SIGNAL', name,
+        'Whale: ' + t._whale + ' · Safety: ' + t._safety + ' · ' + t._structure,
+        'var(--green2)');
+    }
+    if ((t._signal === 'SELL' || t._signal === 'STRONG SELL') &&
+        (prev === 'BUY' || prev === 'STRONG BUY')) {
+      pushAlert('BEARISH FLIP', name, 'Signal → ' + t._signal, 'var(--sell)');
+    }
+    prevSignalMap[t.pairAddress] = t._signal;
+  });
+}
+
+function pushAlert(type, token, detail, color) {
+  const id = Date.now() + Math.random();
+  alertsList.push({ id, type, token, detail, color });
+  if (alertsList.length > 6) alertsList = alertsList.slice(-6);
+  renderAlerts();
+  setTimeout(() => {
+    alertsList = alertsList.filter(a => a.id !== id);
+    renderAlerts();
+  }, 9000);
+}
+
+function renderAlerts() {
+  document.getElementById('alertsArea').innerHTML = alertsList.slice(-4).map(a => `
+    <div class="alert-toast" onclick="dismissAlert(${a.id})" style="border-left:3px solid ${a.color}">
+      <div class="a-type"   style="color:${a.color}">● ${a.type}</div>
+      <div class="a-token">${a.token}</div>
+      <div class="a-detail">${a.detail}</div>
+    </div>`).join('');
+}
+
+function dismissAlert(id) {
+  alertsList = alertsList.filter(a => a.id !== id);
+  renderAlerts();
+}
+
+/* ───────────────────────────────────────────────
+   BOOT
+─────────────────────────────────────────────── */
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
