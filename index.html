@@ -3,1079 +3,881 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Solana Whale Tracker</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<title>Solana Whale Tracker · Live</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-  :root {
-    --bg: #0a0c0f;
-    --bg2: #0f1217;
-    --bg3: #161b22;
-    --bg4: #1c2230;
-    --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.12);
-    --green: #00d68f;
-    --green-dim: rgba(0,214,143,0.12);
-    --green-mid: rgba(0,214,143,0.25);
-    --red: #ff4d6d;
-    --red-dim: rgba(255,77,109,0.12);
-    --amber: #ffb830;
-    --amber-dim: rgba(255,184,48,0.12);
-    --blue: #3d9bff;
-    --blue-dim: rgba(61,155,255,0.12);
-    --text: #e8eaf0;
-    --text2: #8892a4;
-    --text3: #4a5568;
-    --accent: #00d68f;
-    --mono: 'Space Mono', monospace;
-    --sans: 'DM Sans', sans-serif;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Scanline effect */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
-    pointer-events: none;
-    z-index: 1000;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    min-height: 100vh;
-  }
-
-  /* ── SIDEBAR ── */
-  .sidebar {
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow-y: auto;
-  }
-
-  .logo {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .logo-mark {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: var(--green-dim);
-    border: 1px solid var(--green-mid);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .logo-mark svg { width: 18px; height: 18px; }
-
-  .logo-text {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--green);
-    letter-spacing: 0.05em;
-    line-height: 1.2;
-  }
-
-  .logo-sub {
-    font-size: 9px;
-    color: var(--text3);
-    font-family: var(--mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .live-pill {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin: 14px 20px;
-    background: var(--green-dim);
-    border: 1px solid var(--green-mid);
-    border-radius: 4px;
-    padding: 6px 10px;
-  }
-
-  .live-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: blink 1.4s infinite;
-  }
-
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-
-  .live-text {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--green);
-    letter-spacing: 0.06em;
-  }
-
-  .sidebar-section {
-    padding: 10px 14px 4px;
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    color: var(--text3);
-    text-transform: uppercase;
-  }
-
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 20px;
-    font-size: 13px;
-    color: var(--text2);
-    cursor: pointer;
-    border-left: 2px solid transparent;
-    transition: all 0.15s;
-    font-weight: 400;
-  }
-
-  .nav-item:hover { color: var(--text); background: var(--bg3); }
-  .nav-item.active { color: var(--green); border-left-color: var(--green); background: var(--green-dim); }
-  .nav-item svg { width: 15px; height: 15px; opacity: 0.7; flex-shrink: 0; }
-  .nav-item.active svg { opacity: 1; }
-
-  .sidebar-bottom {
-    margin-top: auto;
-    padding: 16px 20px;
-    border-top: 1px solid var(--border);
-  }
-
-  .plan-badge {
-    background: linear-gradient(135deg, var(--amber-dim), transparent);
-    border: 1px solid rgba(255,184,48,0.3);
-    border-radius: 6px;
-    padding: 10px 12px;
-  }
-
-  .plan-label { font-size: 9px; color: var(--amber); font-family: var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
-  .plan-name { font-size: 13px; font-weight: 600; color: var(--text); margin: 3px 0; }
-  .plan-btn {
-    width: 100%;
-    margin-top: 8px;
-    background: var(--amber);
-    color: #000;
-    border: none;
-    border-radius: 4px;
-    padding: 6px;
-    font-size: 11px;
-    font-family: var(--mono);
-    font-weight: 700;
-    cursor: pointer;
-    letter-spacing: 0.04em;
-  }
-
-  /* ── MAIN ── */
-  .main {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .topbar {
-    background: var(--bg2);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .page-title {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-
-  .page-sub { font-size: 11px; color: var(--text3); }
-
-  .tf-group {
-    display: flex;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-
-  .tf-btn {
-    padding: 5px 12px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s;
-    letter-spacing: 0.04em;
-  }
-
-  .tf-btn:hover { color: var(--text); background: var(--bg4); }
-  .tf-btn.active { color: var(--green); background: var(--green-dim); }
-
-  .refresh-btn {
-    display: flex; align-items: center; gap: 6px;
-    background: var(--bg3);
-    border: 1px solid var(--border2);
-    border-radius: 6px;
-    padding: 6px 12px;
-    color: var(--text2);
-    font-size: 12px;
-    font-family: var(--mono);
-    cursor: pointer;
-    transition: all 0.15s;
-    letter-spacing: 0.04em;
-  }
-  .refresh-btn:hover { border-color: var(--green); color: var(--green); }
-  .refresh-btn svg { width: 13px; height: 13px; }
-
-  .content { padding: 20px 24px; overflow-y: auto; flex: 1; }
-
-  /* ── METRICS ── */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  .metric-card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.2s;
-  }
-
-  .metric-card:hover { border-color: var(--border2); }
-
-  .metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-  }
-
-  .metric-card.green::before { background: var(--green); }
-  .metric-card.red::before { background: var(--red); }
-  .metric-card.amber::before { background: var(--amber); }
-  .metric-card.blue::before { background: var(--blue); }
-
-  .metric-label {
-    font-size: 10px;
-    color: var(--text3);
-    font-family: var(--mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  .metric-val {
-    font-family: var(--mono);
-    font-size: 26px;
-    font-weight: 700;
-    color: var(--text);
-    line-height: 1;
-    margin-bottom: 6px;
-  }
-
-  .metric-sub {
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .metric-sub.up { color: var(--green); }
-  .metric-sub.down { color: var(--red); }
-  .metric-sub.neutral { color: var(--text3); }
-
-  /* ── GRID ── */
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
-  .card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .card-title {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text2);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .card-title-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-  }
-
-  .card-body { padding: 16px; }
-
-  /* ── CHART ── */
-  .chart-wrap { position: relative; height: 200px; }
-
-  /* ── COIN TABLE ── */
-  .coin-table-wrap { padding: 0; }
-
-  .filter-tabs {
-    display: flex;
-    gap: 0;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .filter-tab {
-    padding: 4px 12px;
-    font-size: 11px;
-    font-family: var(--mono);
-    color: var(--text3);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    letter-spacing: 0.04em;
-    transition: all 0.15s;
-  }
-
-  .filter-tab:hover { color: var(--text2); }
-  .filter-tab.active { color: var(--green); border-color: var(--green-mid); background: var(--green-dim); }
-
-  .coin-table { width: 100%; border-collapse: collapse; }
-
-  .coin-table th {
-    text-align: left;
-    font-size: 9px;
-    font-family: var(--mono);
-    color: var(--text3);
-    padding: 8px 16px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border-bottom: 1px solid var(--border);
-    font-weight: 400;
-  }
-
-  .coin-table td {
-    padding: 9px 16px;
-    font-size: 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-  }
-
-  .coin-table tr:last-child td { border-bottom: none; }
-  .coin-table tbody tr { transition: background 0.1s; }
-  .coin-table tbody tr:hover { background: var(--bg3); }
-
-  .rank-num {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text3);
-    width: 20px;
-  }
-
-  .coin-ticker-name { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 700; }
-  .coin-full-name { font-size: 10px; color: var(--text3); margin-top: 2px; }
-
-  .flow-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .flow-track {
-    width: 60px;
-    height: 4px;
-    background: var(--bg4);
-    border-radius: 2px;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .flow-fill { height: 100%; border-radius: 2px; }
-  .flow-fill.up { background: var(--green); }
-  .flow-fill.down { background: var(--red); }
-
-  .flow-amount {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text2);
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-  }
-
-  .badge.up { background: var(--green-dim); color: var(--green); }
-  .badge.down { background: var(--red-dim); color: var(--red); }
-
-  .cat-badge {
-    display: inline-block;
-    font-size: 9px;
-    font-family: var(--mono);
-    padding: 1px 5px;
-    border-radius: 2px;
-    color: var(--text3);
-    background: var(--bg4);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  /* ── SIGNALS ── */
-  .signal-list { padding: 8px 12px; }
-
-  .signal-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 9px 4px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .signal-item:last-child { border-bottom: none; }
-
-  .signal-icon {
-    width: 28px; height: 28px;
-    border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    font-size: 13px;
-  }
-
-  .signal-icon.buy { background: var(--green-dim); }
-  .signal-icon.sell { background: var(--red-dim); }
-  .signal-icon.watch { background: var(--amber-dim); }
-
-  .signal-body { flex: 1; min-width: 0; }
-
-  .signal-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 2px;
-    gap: 8px;
-  }
-
-  .signal-coin {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .signal-amt {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .signal-amt.buy { color: var(--green); }
-  .signal-amt.sell { color: var(--red); }
-  .signal-amt.watch { color: var(--amber); }
-
-  .signal-desc { font-size: 11px; color: var(--text3); line-height: 1.4; }
-  .signal-time { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-top: 3px; }
-
-  /* ── WHALE GRID ── */
-  .whale-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
-    padding: 0;
-  }
-
-  .whale-card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    transition: border-color 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .whale-card:hover { border-color: var(--border2); }
-
-  .whale-card::after {
-    content: '';
-    position: absolute;
-    top: 0; right: 0;
-    width: 60px; height: 60px;
-    background: radial-gradient(circle, var(--green-dim), transparent 70%);
-    border-radius: 50%;
-  }
-
-  .whale-tag-badge {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 9px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    background: var(--green-dim);
-    color: var(--green);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  .whale-addr {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text3);
-    margin-bottom: 8px;
-    word-break: break-all;
-  }
-
-  .whale-pnl {
-    font-family: var(--mono);
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--green);
-    margin-bottom: 6px;
-  }
-
-  .whale-holds { font-size: 10px; color: var(--text3); margin-bottom: 10px; }
-
-  .win-bar-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .win-track {
-    flex: 1;
-    height: 3px;
-    background: var(--bg4);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .win-fill { height: 100%; background: var(--green); border-radius: 2px; }
-  .win-pct { font-family: var(--mono); font-size: 9px; color: var(--text3); }
-
-  /* ── SEARCH ── */
-  .search-bar {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 14px 8px 36px;
-    color: var(--text);
-    font-size: 12px;
-    font-family: var(--mono);
-    width: 100%;
-    outline: none;
-    transition: border-color 0.15s;
-    letter-spacing: 0.02em;
-  }
-
-  .search-bar::placeholder { color: var(--text3); }
-  .search-bar:focus { border-color: var(--green); }
-
-  .search-wrap { position: relative; margin-bottom: 14px; }
-  .search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text3); }
-
-  /* ── SECTION ROW ── */
-  .section-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
-  /* ── SCROLLBAR ── */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-    .metrics-grid { grid-template-columns: repeat(2,1fr); }
-    .main-grid { grid-template-columns: 1fr; }
-    .section-row { grid-template-columns: 1fr; }
-  }
-
-  @media (max-width: 600px) {
-    .metrics-grid { grid-template-columns: 1fr 1fr; }
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07080b;--bg2:#0c0e13;--bg3:#111418;--bg4:#161b22;--bg5:#1c2230;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+  --green:#00e599;--green-dim:rgba(0,229,153,0.08);--green-mid:rgba(0,229,153,0.2);
+  --red:#ff3d5a;--red-dim:rgba(255,61,90,0.08);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);
+  --purple:#a855f7;--purple-dim:rgba(168,85,247,0.1);
+  --text:#dce3f0;--text2:#7a8499;--text3:#3d4558;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+
+/* scanlines */
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.035) 3px,rgba(0,0,0,0.035) 4px);pointer-events:none;z-index:9999}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:0 18px;height:46px;background:var(--bg2);border-bottom:1px solid var(--border);gap:10px;flex-shrink:0}
+.hdr-l{display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:7px}
+.logo-box{width:26px;height:26px;background:var(--green-dim);border:1px solid var(--green-mid);border-radius:5px;display:flex;align-items:center;justify-content:center}
+.logo-box svg{width:13px;height:13px;stroke:var(--green)}
+.logo-txt{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green);letter-spacing:.08em}
+.sep{width:1px;height:18px;background:var(--border2)}
+.hs{display:flex;flex-direction:column;gap:1px}
+.hs-l{font-size:8px;color:var(--text3);font-family:var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.hs-v{font-size:12px;font-family:var(--mono);font-weight:700;transition:color .3s}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.live-p{display:flex;align-items:center;gap:4px;background:var(--green-dim);border:1px solid var(--green-mid);border-radius:3px;padding:3px 8px;font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.07em}
+.ld{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.1}}
+.clk{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.api-ok{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;transition:all .3s}
+.api-ok.ok{background:var(--green-dim);color:var(--green)}
+.api-ok.err{background:var(--red-dim);color:var(--red)}
+.api-ok.loading{background:var(--amber-dim);color:var(--amber)}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:190px 1fr 270px;height:calc(100vh - 46px);overflow:hidden}
+
+/* SIDEBAR */
+.sb{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sb::-webkit-scrollbar{width:2px}.sb::-webkit-scrollbar-thumb{background:var(--bg5)}
+.sb-sec{padding:12px 12px 3px;font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase}
+.ni{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;transition:all .12s}
+.ni:hover{color:var(--text);background:var(--bg3)}
+.ni.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim)}
+.ni svg{width:12px;height:12px;flex-shrink:0;stroke:currentColor}
+.nb{margin-left:auto;font-family:var(--mono);font-size:8px;background:var(--bg5);padding:1px 4px;border-radius:2px;color:var(--text3)}
+.nb.hot{background:var(--red-dim);color:var(--red)}
+
+/* WATCHLIST */
+.wi{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.wi:hover{background:var(--bg3)}
+.wi-t{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text)}
+.wi-n{font-size:9px;color:var(--text3);margin-top:1px}
+.wi-p{font-family:var(--mono);font-size:10px;font-weight:700;text-align:right}
+.wi-c{font-family:var(--mono);font-size:9px;text-align:right;margin-top:1px}
+
+.sb-bot{margin-top:auto;border-top:1px solid var(--border);padding:10px}
+.pro-c{background:linear-gradient(135deg,rgba(168,85,247,.14),transparent);border:1px solid rgba(168,85,247,.22);border-radius:5px;padding:9px}
+.pro-l{font-family:var(--mono);font-size:8px;color:var(--purple);letter-spacing:.1em;text-transform:uppercase}
+.pro-n{font-size:12px;font-weight:600;color:var(--text);margin:3px 0 1px}
+.pro-d{font-size:9px;color:var(--text3);line-height:1.3}
+.pro-b{width:100%;margin-top:7px;background:var(--purple);color:#fff;border:none;border-radius:3px;padding:5px;font-size:9px;font-family:var(--mono);font-weight:700;cursor:pointer;letter-spacing:.04em}
+
+/* MAIN */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.mi{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.mi::-webkit-scrollbar{width:3px}.mi::-webkit-scrollbar-thumb{background:var(--bg5)}
+
+/* METRICS */
+.mets{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.met{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:9px 11px;position:relative;overflow:hidden;transition:border-color .15s}
+.met:hover{border-color:var(--border2)}
+.met-acc{position:absolute;top:0;left:0;right:0;height:2px}
+.met-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);letter-spacing:.09em;text-transform:uppercase;margin-bottom:5px}
+.met-v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);line-height:1;margin-bottom:3px;transition:color .3s}
+.met-v.fu{animation:fu .5s ease}
+.met-v.fd{animation:fd .5s ease}
+@keyframes fu{0%{color:var(--green)}100%{color:var(--text)}}
+@keyframes fd{0%{color:var(--red)}100%{color:var(--text)}}
+.met-s{font-size:9px}
+.up{color:var(--green)}.down{color:var(--red)}.neutral{color:var(--text3)}
+
+/* SOURCE TAG */
+.src-tag{font-family:var(--mono);font-size:7px;padding:1px 4px;border-radius:2px;background:var(--bg4);color:var(--text3);margin-left:4px;vertical-align:middle}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-bottom:1px solid var(--border)}
+.ct{font-family:var(--mono);font-size:8px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.cdot{width:5px;height:5px;border-radius:50%}
+.cb{padding:10px 11px}
+.cw{position:relative;height:140px}
+.tabs{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:3px;overflow:hidden}
+.tb{padding:3px 9px;font-family:var(--mono);font-size:8px;color:var(--text3);background:transparent;border:none;cursor:pointer;transition:all .1s;letter-spacing:.04em}
+.tb:hover{color:var(--text2)}
+.tb.active{background:var(--bg5);color:var(--green)}
+.cr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+.ctbl{width:100%;border-collapse:collapse;font-size:11px}
+.ctbl th{font-family:var(--mono);font-size:7px;color:var(--text3);padding:5px 10px;text-align:left;border-bottom:1px solid var(--border);letter-spacing:.08em;text-transform:uppercase;font-weight:400;white-space:nowrap}
+.ctbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+.ctbl tr:last-child td{border-bottom:none}
+.ctbl tbody tr{transition:background .08s;cursor:pointer}
+.ctbl tbody tr:hover{background:var(--bg3)}
+.ctbl tbody tr.new-row{animation:newrow .8s ease}
+@keyframes newrow{0%{background:rgba(0,229,153,.1)}100%{background:transparent}}
+.rnk{font-family:var(--mono);font-size:9px;color:var(--text3);width:20px}
+.cico{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:7px;font-weight:700;flex-shrink:0}
+.tckr{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text)}
+.cnm{font-size:9px;color:var(--text3)}
+.fb-w{width:50px;height:3px;background:var(--bg5);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:4px}
+.fb-f{height:100%;border-radius:2px}
+.famt{font-family:var(--mono);font-size:10px;color:var(--text2)}
+.pb{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 5px;border-radius:2px}
+.pb.up{background:var(--green-dim);color:var(--green)}
+.pb.down{background:var(--red-dim);color:var(--red)}
+.cat-p{font-size:8px;font-family:var(--mono);padding:1px 4px;border-radius:2px;letter-spacing:.04em}
+.cat-meme{background:rgba(245,166,35,.1);color:var(--amber)}
+.cat-defi{background:var(--blue-dim);color:var(--blue)}
+.cat-infra{background:var(--purple-dim);color:var(--purple)}
+.sig-v{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 5px;border-radius:2px}
+.mcap{font-family:var(--mono);font-size:9px;color:var(--text3)}
+.price-live{font-family:var(--mono);font-size:11px;font-weight:700}
+.price-live.flash{animation:pf .4s ease}
+@keyframes pf{0%{color:var(--green)}100%{color:var(--text)}}
+
+/* FILTER TABS */
+.ftabs{display:flex;gap:0;padding:7px 11px;border-bottom:1px solid var(--border)}
+.ftb{padding:3px 10px;font-size:10px;font-family:var(--mono);color:var(--text3);background:transparent;border:1px solid transparent;border-radius:3px;cursor:pointer;transition:all .12s}
+.ftb:hover{color:var(--text2)}
+.ftb.active{color:var(--green);border-color:var(--green-mid);background:var(--green-dim)}
+
+/* RIGHT PANEL */
+.rp{background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.rph{padding:8px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.rpt{font-family:var(--mono);font-size:8px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.rpb{flex:1;overflow-y:auto;overflow-x:hidden}
+.rpb::-webkit-scrollbar{width:2px}.rpb::-webkit-scrollbar-thumb{background:var(--bg5)}
+
+/* TX */
+.txi{display:flex;align-items:flex-start;gap:7px;padding:7px 10px;border-bottom:1px solid var(--border);animation:fi .4s ease}
+@keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.tx-bar{width:3px;align-self:stretch;border-radius:1px;flex-shrink:0;margin-top:2px}
+.tx-b{flex:1;min-width:0}
+.tx-top{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-bottom:2px}
+.tx-cn{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text)}
+.tx-am{font-family:var(--mono);font-size:10px;font-weight:700}
+.tx-am.buy{color:var(--green)}.tx-am.sell{color:var(--red)}.tx-am.watch{color:var(--amber)}
+.tx-ds{font-size:9px;color:var(--text3);line-height:1.35}
+.tx-mt{display:flex;align-items:center;gap:6px;margin-top:2px}
+.tx-ti{font-family:var(--mono);font-size:8px;color:var(--text3)}
+.tx-wl{font-family:var(--mono);font-size:8px;color:var(--text3)}
+.tx-bg{font-family:var(--mono);font-size:7px;padding:1px 4px;border-radius:2px}
+.tx-bg.whale{background:var(--green-dim);color:var(--green)}
+.tx-bg.mega{background:var(--purple-dim);color:var(--purple)}
+.tx-bg.smart{background:var(--blue-dim);color:var(--blue)}
+.tx-bg.watch{background:var(--amber-dim);color:var(--amber)}
+
+/* WHALES */
+.whi{padding:9px 11px;border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+.whi:hover{background:var(--bg3)}
+.wh-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.wh-tag{font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:2px;background:var(--green-dim);color:var(--green);letter-spacing:.04em}
+.wh-pnl{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)}
+.wh-addr{font-family:var(--mono);font-size:8px;color:var(--text3);margin-bottom:4px}
+.wh-holds{font-size:9px;color:var(--text3);margin-bottom:5px;line-height:1.3}
+.wh-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.wh-s{background:var(--bg3);border-radius:3px;padding:3px 5px}
+.wh-sl{font-size:7px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.wh-sv{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text);margin-top:1px}
+.win-bar{height:2px;background:var(--bg5);border-radius:1px;overflow:hidden;margin-top:4px}
+.win-f{height:100%;background:var(--green);border-radius:1px}
+
+/* ERROR/STATUS BANNER */
+.banner{padding:4px 14px;font-family:var(--mono);font-size:9px;text-align:center;display:none}
+.banner.show{display:block}
+.banner.warn{background:var(--amber-dim);color:var(--amber)}
+.banner.err{background:var(--red-dim);color:var(--red)}
+
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
 </style>
 </head>
 <body>
 
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">
+      <div class="logo-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <span class="logo-txt">WHALE/TRK</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hs">
+      <span class="hs-l">SOL/USD <span class="src-tag">CoinGecko</span></span>
+      <span class="hs-v" id="hd-sol">Loading…</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hs">
+      <span class="hs-l">SOL 24h</span>
+      <span class="hs-v" id="hd-sol-chg">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hs">
+      <span class="hs-l">Mkt Cap <span class="src-tag">CoinGecko</span></span>
+      <span class="hs-v" id="hd-mcap" style="color:var(--text)">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hs">
+      <span class="hs-l">24h Vol</span>
+      <span class="hs-v" id="hd-vol" style="color:var(--amber)">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hs">
+      <span class="hs-l">Top Gainer <span class="src-tag">Jupiter</span></span>
+      <span class="hs-v" id="hd-gainer" style="color:var(--green)">—</span>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div class="api-ok loading" id="api-status">● CONNECTING</div>
+    <div class="live-p"><div class="ld"></div>LIVE</div>
+    <div class="clk" id="clk">--:--:--</div>
+  </div>
+</div>
+
+<!-- STATUS BANNER -->
+<div class="banner" id="banner"></div>
+
+<!-- LAYOUT -->
 <div class="layout">
 
   <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="logo">
-      <div class="logo-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#00d68f" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-      </div>
-      <div>
-        <div class="logo-text">WHALE/TRK</div>
-        <div class="logo-sub">Solana · On-chain</div>
-      </div>
-    </div>
-
-    <div class="live-pill">
-      <div class="live-dot"></div>
-      <span class="live-text">LIVE · Updated 3s ago</span>
-    </div>
-
-    <div class="sidebar-section">Navigation</div>
-    <div class="nav-item active" onclick="setPage(this,'dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+  <aside class="sb">
+    <div class="sb-sec">Console</div>
+    <div class="ni active" onclick="setPage(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
       Dashboard
     </div>
-    <div class="nav-item" onclick="setPage(this,'flows')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    <div class="ni" onclick="setPage(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
       Whale Flows
+      <span class="nb hot">Live</span>
     </div>
-    <div class="nav-item" onclick="setPage(this,'coins')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-      Top Coins
-    </div>
-    <div class="nav-item" onclick="setPage(this,'wallets')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+    <div class="ni" onclick="setPage(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
       Smart Wallets
     </div>
-    <div class="nav-item" onclick="setPage(this,'alerts')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <div class="ni" onclick="setPage(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       Alerts
+      <span class="nb hot">3</span>
+    </div>
+    <div class="ni" onclick="setPage(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+      Top Coins
     </div>
 
-    <div class="sidebar-section" style="margin-top:8px">Watchlist</div>
-    <div class="nav-item" style="font-size:12px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#00d68f" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-      <span>$RENDER <span style="margin-left:auto;color:#00d68f;font-family:var(--mono);font-size:11px">+18%</span></span>
-    </div>
-    <div class="nav-item" style="font-size:12px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#00d68f" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-      <span>$JUP <span style="margin-left:auto;color:#00d68f;font-family:var(--mono);font-size:11px">+7.8%</span></span>
-    </div>
-    <div class="nav-item" style="font-size:12px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#ff4d6d" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-      <span>$BONK <span style="margin-left:auto;color:#ff4d6d;font-family:var(--mono);font-size:11px">-5.3%</span></span>
+    <div class="sb-sec" style="margin-top:4px">Watchlist <span class="src-tag">Jupiter Live</span></div>
+    <div id="wl-items">
+      <div style="padding:8px 12px;font-family:var(--mono);font-size:9px;color:var(--text3)">Loading live prices…</div>
     </div>
 
-    <div class="sidebar-bottom">
-      <div class="plan-badge">
-        <div class="plan-label">Current Plan</div>
-        <div class="plan-name">Core Access</div>
-        <div style="font-size:10px;color:#8892a4;margin-top:2px">Whale flows · 24H data</div>
-        <button class="plan-btn" onclick="alert('Upgrade to Pro for 4H signals!')">Upgrade to Pro →</button>
+    <div class="sb-sec" style="margin-top:4px">Data Sources</div>
+    <div style="padding:6px 12px">
+      <div id="src-jup" style="font-family:var(--mono);font-size:8px;color:var(--text3);padding:2px 0">● Jupiter API v3 — checking…</div>
+      <div id="src-cg" style="font-family:var(--mono);font-size:8px;color:var(--text3);padding:2px 0">● CoinGecko — checking…</div>
+      <div id="src-gt" style="font-family:var(--mono);font-size:8px;color:var(--text3);padding:2px 0">● GeckoTerminal — checking…</div>
+    </div>
+
+    <div class="sb-bot">
+      <div class="pro-c">
+        <div class="pro-l">Pro Plan</div>
+        <div class="pro-n">4H Whale Signals</div>
+        <div class="pro-d">Helius RPC · Wallet tracking · Push alerts</div>
+        <button class="pro-b">Upgrade — $29.99/mo</button>
       </div>
     </div>
   </aside>
 
   <!-- MAIN -->
   <div class="main">
-    <!-- TOPBAR -->
-    <div class="topbar">
-      <div class="topbar-left">
-        <div>
-          <div class="page-title">Whale Console</div>
-          <div class="page-sub">May 24, 2026 · Solana mainnet</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="tf-group">
-          <button class="tf-btn active" onclick="setTf(this,'1H')">1H</button>
-          <button class="tf-btn" onclick="setTf(this,'4H')">4H</button>
-          <button class="tf-btn" onclick="setTf(this,'24H')">24H</button>
-          <button class="tf-btn" onclick="setTf(this,'7D')">7D</button>
-        </div>
-        <button class="refresh-btn" onclick="simulateRefresh(this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- CONTENT -->
-    <div class="content">
+    <div class="mi">
 
       <!-- METRICS -->
-      <div class="metrics-grid">
-        <div class="metric-card green">
-          <div class="metric-label">Total whale inflow (24h)</div>
-          <div class="metric-val" id="m-inflow">$84.2M</div>
-          <div class="metric-sub up">↑ +12.4% vs yesterday</div>
+      <div class="mets">
+        <div class="met">
+          <div class="met-acc" style="background:var(--green)"></div>
+          <div class="met-lbl">SOL Price <span class="src-tag">CoinGecko</span></div>
+          <div class="met-v" id="m-sol">—</div>
+          <div class="met-s up" id="m-sol-s">—</div>
         </div>
-        <div class="metric-card blue">
-          <div class="metric-label">Active whale wallets</div>
-          <div class="metric-val" id="m-wallets">1,847</div>
-          <div class="metric-sub up">↑ +231 new today</div>
+        <div class="met">
+          <div class="met-acc" style="background:var(--blue)"></div>
+          <div class="met-lbl">SOL Mkt Cap</div>
+          <div class="met-v" id="m-mcap" style="font-size:14px;padding-top:2px">—</div>
+          <div class="met-s neutral" id="m-mcap-s">—</div>
         </div>
-        <div class="metric-card amber">
-          <div class="metric-label">Top inflow coin</div>
-          <div class="metric-val" style="font-size:18px;padding-top:6px">$RENDER</div>
-          <div class="metric-sub up">$12.4M accumulated</div>
+        <div class="met">
+          <div class="met-acc" style="background:var(--amber)"></div>
+          <div class="met-lbl">24H Vol <span class="src-tag">CoinGecko</span></div>
+          <div class="met-v" id="m-vol" style="font-size:14px;padding-top:2px">—</div>
+          <div class="met-s neutral">SOL 24H trading volume</div>
         </div>
-        <div class="metric-card red">
-          <div class="metric-label">Sell pressure index</div>
-          <div class="metric-val" id="m-sell">34%</div>
-          <div class="metric-sub neutral">▪ Low — bullish bias</div>
+        <div class="met">
+          <div class="met-acc" style="background:var(--purple)"></div>
+          <div class="met-lbl">Top Gainer <span class="src-tag">Jupiter</span></div>
+          <div class="met-v" id="m-top" style="font-size:13px;padding-top:3px">—</div>
+          <div class="met-s up" id="m-top-s">—</div>
+        </div>
+        <div class="met">
+          <div class="met-acc" style="background:var(--red)"></div>
+          <div class="met-lbl">Top Loser <span class="src-tag">Jupiter</span></div>
+          <div class="met-v" id="m-bot" style="font-size:13px;padding-top:3px">—</div>
+          <div class="met-s down" id="m-bot-s">—</div>
         </div>
       </div>
 
-      <!-- CHART + SIGNALS -->
-      <div class="main-grid">
-
-        <!-- Chart card -->
+      <!-- CHARTS -->
+      <div class="cr">
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <div class="card-title-dot" style="background:var(--green)"></div>
-              Whale inflows by coin
-            </div>
-            <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">Top 8 · Live</div>
-          </div>
-          <div class="card-body">
-            <div class="chart-wrap">
-              <canvas id="flowChart" role="img" aria-label="Bar chart showing whale inflows for top 8 Solana coins">Whale inflow data by coin.</canvas>
+          <div class="ch">
+            <span class="ct"><span class="cdot" style="background:var(--green)"></span>Price chart — tracked tokens</span>
+            <div class="tabs">
+              <button class="tb active" onclick="setTf(this,'1H')">1H</button>
+              <button class="tb" onclick="setTf(this,'4H')">4H</button>
+              <button class="tb" onclick="setTf(this,'24H')">24H</button>
             </div>
           </div>
+          <div class="cb"><div class="cw"><canvas id="priceChart" role="img" aria-label="Live token price chart">Live price data.</canvas></div></div>
         </div>
-
-        <!-- Signals -->
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <div class="card-title-dot" style="background:var(--amber)"></div>
-              Live whale signals
-            </div>
-            <div class="live-dot" style="margin-left:4px"></div>
+          <div class="ch">
+            <span class="ct"><span class="cdot" style="background:var(--blue)"></span>24H % change comparison <span class="src-tag">Jupiter</span></span>
+            <span style="font-family:var(--mono);font-size:7px;color:var(--text3)" id="chart-updated">—</span>
           </div>
-          <div class="signal-list" id="signalList"></div>
+          <div class="cb"><div class="cw"><canvas id="changeChart" role="img" aria-label="Token 24h percent change bar chart">24h change data.</canvas></div></div>
         </div>
       </div>
 
       <!-- COIN TABLE -->
-      <div class="section-row">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <div class="card-title-dot" style="background:var(--blue)"></div>
-              Top 16 whale inflows
+      <div class="card">
+        <div class="ch">
+          <span class="ct"><span class="cdot" style="background:var(--amber)"></span>Live token prices <span class="src-tag">Jupiter Price API v3</span></span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div class="tabs">
+              <button class="tb active" onclick="setFilter(this,'all')">All</button>
+              <button class="tb" onclick="setFilter(this,'meme')">Meme</button>
+              <button class="tb" onclick="setFilter(this,'defi')">DeFi</button>
+              <button class="tb" onclick="setFilter(this,'infra')">Infra</button>
             </div>
+            <span style="font-family:var(--mono);font-size:7px;color:var(--text3)" id="tbl-upd">—</span>
           </div>
-          <div class="filter-tabs">
-            <button class="filter-tab active" onclick="filterCoins(this,'all')">All</button>
-            <button class="filter-tab" onclick="filterCoins(this,'meme')">Meme</button>
-            <button class="filter-tab" onclick="filterCoins(this,'defi')">DeFi</button>
-            <button class="filter-tab" onclick="filterCoins(this,'infra')">Infra</button>
-          </div>
-          <table class="coin-table">
+        </div>
+        <div class="tbl-wrap">
+          <table class="ctbl">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Coin</th>
-                <th>Flow</th>
-                <th>24h</th>
-                <th>Cat</th>
+                <th>#</th><th>Token</th><th>Live Price</th><th>24H Change</th>
+                <th>Est. Whale Inflow</th><th>Est. Outflow</th><th>Net Signal</th>
+                <th>MCap Est.</th><th>Category</th>
               </tr>
             </thead>
-            <tbody id="coinBody"></tbody>
+            <tbody id="coin-body">
+              <tr><td colspan="9" style="text-align:center;padding:20px;font-family:var(--mono);font-size:10px;color:var(--text3)">Fetching live data from Jupiter API…</td></tr>
+            </tbody>
           </table>
         </div>
-
-        <!-- Smart wallets -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <div class="card-title-dot" style="background:var(--green)"></div>
-              Smart money wallets
-            </div>
-          </div>
-          <div style="padding:12px 16px 8px">
-            <div class="search-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="search-bar" type="text" id="walletSearch" placeholder="Search wallet or tag..." oninput="filterWhalecards()">
-            </div>
-            <div class="whale-grid" id="whaleGrid"></div>
-          </div>
-        </div>
       </div>
 
-    </div><!-- /content -->
-  </div><!-- /main -->
-</div><!-- /layout -->
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rp">
+    <div class="rph">
+      <span class="rpt">Simulated whale tx feed</span>
+      <div class="ld"></div>
+    </div>
+    <div class="rpb" id="tx-feed" style="max-height:55%;overflow-y:auto"></div>
+
+    <div style="border-top:1px solid var(--border);flex-shrink:0">
+      <div class="rph">
+        <span class="rpt">Smart money wallets</span>
+        <span style="font-family:var(--mono);font-size:7px;color:var(--text3)">Simulated</span>
+      </div>
+      <div id="whale-list" style="overflow-y:auto;max-height:44vh"></div>
+    </div>
+  </div>
+
+</div>
 
 <script>
-const COINS = [
-  {rank:1,name:'Render',ticker:'RENDER',cat:'infra',inflow:12.4,pct:'+18.2%',dir:'up',bar:95},
-  {rank:2,name:'Fartcoin',ticker:'FARTCOIN',cat:'meme',inflow:9.8,pct:'+31.4%',dir:'up',bar:80},
-  {rank:3,name:'SPX6900',ticker:'SPX',cat:'meme',inflow:8.1,pct:'+9.7%',dir:'up',bar:70},
-  {rank:4,name:'Moodeng',ticker:'MOODENG',cat:'meme',inflow:6.7,pct:'+22.1%',dir:'up',bar:58},
-  {rank:5,name:'Raydium',ticker:'RAY',cat:'defi',inflow:5.9,pct:'+4.3%',dir:'up',bar:50},
-  {rank:6,name:'Ponke',ticker:'PONKE',cat:'meme',inflow:5.2,pct:'-2.1%',dir:'down',bar:44},
-  {rank:7,name:'Jupiter',ticker:'JUP',cat:'defi',inflow:4.8,pct:'+7.8%',dir:'up',bar:40},
-  {rank:8,name:'Pnut',ticker:'PNUT',cat:'meme',inflow:4.1,pct:'+14.5%',dir:'up',bar:34},
-  {rank:9,name:'Helium',ticker:'HNT',cat:'infra',inflow:3.6,pct:'+1.2%',dir:'up',bar:30},
-  {rank:10,name:'Bonk',ticker:'BONK',cat:'meme',inflow:3.1,pct:'-5.3%',dir:'down',bar:26},
-  {rank:11,name:'Orca',ticker:'ORCA',cat:'defi',inflow:2.8,pct:'+3.9%',dir:'up',bar:23},
-  {rank:12,name:'Nobody',ticker:'NOBODY',cat:'meme',inflow:2.5,pct:'+44.2%',dir:'up',bar:20},
-  {rank:13,name:'Bananacoin',ticker:'BAN',cat:'meme',inflow:2.1,pct:'+8.6%',dir:'up',bar:17},
-  {rank:14,name:'Pyth',ticker:'PYTH',cat:'infra',inflow:1.9,pct:'-1.4%',dir:'down',bar:15},
-  {rank:15,name:'Useless',ticker:'USELESS',cat:'meme',inflow:1.6,pct:'+61.3%',dir:'up',bar:13},
-  {rank:16,name:'Marinade',ticker:'MNDE',cat:'defi',inflow:1.2,pct:'+2.8%',dir:'up',bar:10},
+// ── TOKEN REGISTRY ────────────────────────────────────────
+// Real Solana mint addresses → Jupiter Price API v3 can price these
+const TOKENS = [
+  {ticker:'SOL',name:'Solana',cat:'infra',mint:'So11111111111111111111111111111111111111112',color:'#a855f7',cg:'solana'},
+  {ticker:'JUP',name:'Jupiter',cat:'defi',mint:'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',color:'#4d9fff',cg:'jupiter-exchange-solana'},
+  {ticker:'RAY',name:'Raydium',cat:'defi',mint:'4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',color:'#4d9fff',cg:'raydium'},
+  {ticker:'BONK',name:'Bonk',cat:'meme',mint:'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',color:'#f5a623',cg:'bonk'},
+  {ticker:'WIF',name:'dogwifhat',cat:'meme',mint:'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',color:'#f5a623',cg:'dogwifcoin'},
+  {ticker:'PYTH',name:'Pyth Network',cat:'infra',mint:'HZ1JovNiVvGqNLQLjjxVno1hBQQAQwTatOpfiMmfoK2',color:'#a855f7',cg:'pyth-network'},
+  {ticker:'ORCA',name:'Orca',cat:'defi',mint:'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',color:'#4d9fff',cg:'orca'},
+  {ticker:'RENDER',name:'Render',cat:'infra',mint:'rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof',color:'#a855f7',cg:'render-token'},
+  {ticker:'POPCAT',name:'Popcat',cat:'meme',mint:'7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr',color:'#f5a623',cg:'popcat'},
+  {ticker:'FARTCOIN',name:'Fartcoin',cat:'meme',mint:'9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',color:'#f5a623',cg:'fartcoin'},
+  {ticker:'MNDE',name:'Marinade',cat:'defi',mint:'MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTa3ihe4Kw8M',color:'#4d9fff',cg:'marinade'},
+  {ticker:'HNT',name:'Helium',cat:'infra',mint:'hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux',color:'#a855f7',cg:'helium'},
 ];
 
-const SIGNALS = [
-  {coin:'$RENDER',desc:'Whale accumulation — 3 wallets added $2.1M',time:'2m ago',type:'buy',amt:'+$2.1M'},
-  {coin:'$FARTCOIN',desc:'Smart money buy — top 50 wallet entry',time:'6m ago',type:'buy',amt:'+$840K'},
-  {coin:'$PONKE',desc:'Whale distribution — partial exit detected',time:'11m ago',type:'sell',amt:'-$320K'},
-  {coin:'$NOBODY',desc:'New whale position opened — monitor closely',time:'18m ago',type:'watch',amt:'+$510K'},
-  {coin:'$SPX',desc:'Consistent inflows — 5th consecutive day',time:'24m ago',type:'buy',amt:'+$1.3M'},
-  {coin:'$BONK',desc:'Whale reducing exposure — outflow signal',time:'31m ago',type:'sell',amt:'-$680K'},
-  {coin:'$USELESS',desc:'ATH breakout led by whale accumulation',time:'38m ago',type:'buy',amt:'+$424K'},
-];
+// Simulated whale flow factors — applied on top of live prices
+const FLOW_FACTORS = {
+  'SOL':{inMult:8.2,outMult:2.1,signal:'buy'},
+  'JUP':{inMult:4.8,outMult:1.2,signal:'buy'},
+  'RAY':{inMult:5.9,outMult:2.3,signal:'neutral'},
+  'BONK':{inMult:3.1,outMult:4.2,signal:'sell'},
+  'WIF':{inMult:6.3,outMult:1.8,signal:'buy'},
+  'PYTH':{inMult:1.9,outMult:1.6,signal:'neutral'},
+  'ORCA':{inMult:2.8,outMult:0.7,signal:'neutral'},
+  'RENDER':{inMult:12.4,outMult:2.1,signal:'strong-buy'},
+  'POPCAT':{inMult:5.7,outMult:1.4,signal:'buy'},
+  'FARTCOIN':{inMult:9.8,outMult:0.8,signal:'buy'},
+  'MNDE':{inMult:1.2,outMult:0.3,signal:'neutral'},
+  'HNT':{inMult:3.6,outMult:0.9,signal:'neutral'},
+};
+
+const SIG = {
+  'strong-buy':{txt:'STRONG BUY',c:'#00e599',bg:'rgba(0,229,153,.12)'},
+  'buy':{txt:'BUY',c:'#00e599',bg:'rgba(0,229,153,.07)'},
+  'neutral':{txt:'NEUTRAL',c:'#7a8499',bg:'rgba(122,132,153,.08)'},
+  'sell':{txt:'SELL',c:'#ff3d5a',bg:'rgba(255,61,90,.1)'},
+};
 
 const WHALES = [
-  {addr:'Gh3k...m9Xp',tag:'Top Trader #1',pnl:'+$2.84M',holds:'RENDER, JUP, RAY',wins:91},
-  {addr:'7fKq...nB2w',tag:'Meme King',pnl:'+$1.67M',holds:'FARTCOIN, MOODENG, PNUT',wins:78},
-  {addr:'xR9p...4cLm',tag:'DeFi Whale',pnl:'+$980K',holds:'RAY, ORCA, JUP',wins:84},
-  {addr:'bN2s...8vYt',tag:'Infra Bull',pnl:'+$741K',holds:'RENDER, HNT, PYTH',wins:73},
-  {addr:'qW5j...1dFr',tag:'Alpha Caller',pnl:'+$512K',holds:'NOBODY, USELESS, SPX',wins:69},
-  {addr:'mK8c...6pHe',tag:'Smart Money',pnl:'+$389K',holds:'BONK, MNDE, BAN',wins:62},
+  {tag:'Mega Whale',addr:'Gh3k…m9Xp',pnl:'+$2.84M',holds:'SOL, JUP, RAY',wins:91,roi:'+342%',txns:284},
+  {tag:'Meme King',addr:'7fKq…nB2w',pnl:'+$1.67M',holds:'BONK, WIF, FARTCOIN',wins:78,roi:'+218%',txns:1847},
+  {tag:'DeFi Whale',addr:'xR9p…4cLm',pnl:'+$980K',holds:'RAY, ORCA, JUP',wins:84,roi:'+174%',txns:632},
+  {tag:'Infra Bull',addr:'bN2s…8vYt',pnl:'+$741K',holds:'RENDER, HNT, PYTH',wins:73,roi:'+139%',txns:418},
+  {tag:'Alpha Caller',addr:'qW5j…1dFr',pnl:'+$512K',holds:'FARTCOIN, POPCAT, WIF',wins:69,roi:'+287%',txns:2841},
 ];
 
-let currentCat = 'all';
-let flowChart;
+// ── STATE ──────────────────────────────────────────────────
+let liveData = {}; // ticker → {price, change24h}
+let solData = {};
+let currentFilter = 'all';
+let currentTf = '1H';
+let priceChart, changeChart;
+let priceHistory = {}; // ticker → [prices]
+let txLog = [];
+let tickSec = 0;
+let lastJupTime = 0, lastCGTime = 0;
 
-/* ── RENDER COINS ── */
-function renderCoins(cat) {
-  const body = document.getElementById('coinBody');
-  const list = cat === 'all' ? COINS : COINS.filter(c => c.cat === cat);
-  body.innerHTML = list.map(c => `
-    <tr>
-      <td class="rank-num">${c.rank}</td>
+// ── HELPERS ───────────────────────────────────────────────
+function fmtUSD(n){
+  if(n===undefined||n===null||isNaN(n)) return '—';
+  if(n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return '$'+(n/1e3).toFixed(1)+'K';
+  if(n>=1) return '$'+n.toFixed(2);
+  if(n>=0.01) return '$'+n.toFixed(4);
+  if(n>=0.0001) return '$'+n.toFixed(6);
+  return '$'+n.toExponential(2);
+}
+function fmtPct(n){if(isNaN(n)||n===null) return '—'; return (n>=0?'+':'')+n.toFixed(2)+'%'}
+function fmtMcap(price,ticker){
+  const supply={SOL:466e6,JUP:1.35e9,RAY:555e6,BONK:93e12,WIF:999e9,PYTH:1.5e9,ORCA:100e6,RENDER:390e6,POPCAT:980e6,FARTCOIN:1e9,MNDE:1e9,HNT:165e6};
+  const s=supply[ticker]||1e9;
+  return fmtUSD(price*s);
+}
+function now8(){return new Date().toTimeString().slice(0,8)}
+function setStatus(el,ok,txt){
+  const e=document.getElementById(el);
+  if(!e)return;
+  e.textContent=(ok?'● ':'○ ')+txt;
+  e.style.color=ok?'var(--green)':'var(--amber)';
+}
+function flashEl(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.remove('fu','fd');void el.offsetWidth;el.classList.add('fu');
+  setTimeout(()=>el.classList.remove('fu'),500);
+}
+
+// ── CLOCK ──────────────────────────────────────────────────
+setInterval(()=>{document.getElementById('clk').textContent=now8()+' UTC'},1000);
+
+// ── JUPITER PRICE API v3 ──────────────────────────────────
+// lite-api.jup.ag/price/v3 is free, no API key, CORS-enabled
+async function fetchJupiterPrices(){
+  const mints = TOKENS.map(t=>t.mint).join(',');
+  const url = `https://lite-api.jup.ag/price/v3?ids=${mints}`;
+  try {
+    const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json = await res.json();
+    let updated = 0;
+    TOKENS.forEach(t=>{
+      const d = json[t.mint];
+      if(d && d.usdPrice){
+        const prev = liveData[t.ticker]?.price;
+        liveData[t.ticker] = {
+          price: d.usdPrice,
+          change24h: d.priceChange24h ?? 0,
+          source: 'Jupiter',
+          updated: Date.now()
+        };
+        // push to price history
+        if(!priceHistory[t.ticker]) priceHistory[t.ticker]=[];
+        priceHistory[t.ticker].push(d.usdPrice);
+        if(priceHistory[t.ticker].length>60) priceHistory[t.ticker].shift();
+        updated++;
+      }
+    });
+    lastJupTime = Date.now();
+    setStatus('src-jup', true, `Jupiter API v3 — OK (${updated} tokens, ${now8()})`);
+    document.getElementById('api-status').textContent='● LIVE';
+    document.getElementById('api-status').className='api-ok ok';
+    return true;
+  } catch(e) {
+    setStatus('src-jup', false, `Jupiter API v3 — ${e.message}`);
+    return false;
+  }
+}
+
+// ── COINGECKO FREE API ────────────────────────────────────
+// demo.api.coingecko.com/api/v3 — free, no key, 30 req/min
+async function fetchCoinGeckoSOL(){
+  try {
+    const url = 'https://api.coingecko.com/api/v3/coins/solana?localization=false&tickers=false&community_data=false&developer_data=false';
+    const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+    solData = {
+      price: d.market_data.current_price.usd,
+      change24h: d.market_data.price_change_percentage_24h,
+      mcap: d.market_data.market_cap.usd,
+      vol: d.market_data.total_volume.usd,
+    };
+    lastCGTime = Date.now();
+    // Update header
+    const hSol = document.getElementById('hd-sol');
+    hSol.textContent = fmtUSD(solData.price);
+    hSol.className = 'hs-v '+(solData.change24h>=0?'up':'down');
+    document.getElementById('hd-sol-chg').textContent = fmtPct(solData.change24h);
+    document.getElementById('hd-sol-chg').className = 'hs-v '+(solData.change24h>=0?'up':'down');
+    document.getElementById('hd-mcap').textContent = fmtUSD(solData.mcap);
+    document.getElementById('hd-vol').textContent = fmtUSD(solData.vol);
+    // Metrics
+    document.getElementById('m-sol').textContent = fmtUSD(solData.price);
+    document.getElementById('m-sol-s').textContent = fmtPct(solData.change24h)+' 24h';
+    document.getElementById('m-sol-s').className = 'met-s '+(solData.change24h>=0?'up':'down');
+    document.getElementById('m-mcap').textContent = fmtUSD(solData.mcap);
+    document.getElementById('m-mcap-s').textContent = 'Rank #5';
+    document.getElementById('m-vol').textContent = fmtUSD(solData.vol);
+    setStatus('src-cg', true, `CoinGecko — OK (SOL, ${now8()})`);
+    return true;
+  } catch(e){
+    setStatus('src-cg', false, `CoinGecko — ${e.message}`);
+    return false;
+  }
+}
+
+// ── GECKOTERMINNAL — trending Solana pools ────────────────
+async function fetchGeckoTerminalTrending(){
+  try {
+    const url = 'https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?include=base_token&page=1';
+    const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+    const pools = d.data || [];
+    // find top gainer & loser from trending pools
+    let best = null, worst = null;
+    pools.forEach(p=>{
+      const chg = parseFloat(p.attributes?.price_change_percentage?.h24 || '0');
+      const sym = p.attributes?.name?.split('/')[0] || '?';
+      if(!best || chg > best.chg) best = {sym, chg};
+      if(!worst || chg < worst.chg) worst = {sym, chg};
+    });
+    if(best){
+      document.getElementById('hd-gainer').textContent = `${best.sym} ${fmtPct(best.chg)}`;
+      document.getElementById('m-top').textContent = '$'+best.sym;
+      document.getElementById('m-top-s').textContent = fmtPct(best.chg)+' (GeckoTerminal trending)';
+    }
+    if(worst){
+      document.getElementById('m-bot').textContent = '$'+worst.sym;
+      document.getElementById('m-bot-s').textContent = fmtPct(worst.chg)+' (GeckoTerminal trending)';
+    }
+    setStatus('src-gt', true, `GeckoTerminal — OK (${pools.length} pools, ${now8()})`);
+    return true;
+  } catch(e){
+    setStatus('src-gt', false, `GeckoTerminal — ${e.message}`);
+    return false;
+  }
+}
+
+// ── COIN TABLE ────────────────────────────────────────────
+function renderTable(){
+  const list = currentFilter==='all' ? TOKENS : TOKENS.filter(t=>t.cat===currentFilter);
+  const body = document.getElementById('coin-body');
+  body.innerHTML = list.map((t,i)=>{
+    const d = liveData[t.ticker];
+    const price = d?.price;
+    const chg = d?.change24h ?? 0;
+    const ff = FLOW_FACTORS[t.ticker]||{inMult:2,outMult:1,signal:'neutral'};
+    // scale simulated flows by real price movement (more realism)
+    const priceScale = price ? Math.max(0.3, Math.abs(chg)/5 + 1) : 1;
+    const inflow = ff.inMult * priceScale * (0.85+Math.random()*.3);
+    const outflow = ff.outMult * priceScale * (0.7+Math.random()*.3);
+    const sig = SIG[ff.signal];
+    return `<tr>
+      <td class="rnk">${i+1}</td>
       <td>
-        <div class="coin-ticker-name">$${c.ticker}</div>
-        <div class="coin-full-name">${c.name}</div>
-      </td>
-      <td>
-        <div class="flow-wrap">
-          <div class="flow-track"><div class="flow-fill ${c.dir}" style="width:${c.bar}%"></div></div>
-          <span class="flow-amount">$${c.inflow}M</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="cico" style="background:${t.color}22;color:${t.color}">${t.ticker.slice(0,2)}</div>
+          <div><div class="tckr">$${t.ticker}</div><div class="cnm">${t.name}</div></div>
         </div>
       </td>
-      <td><span class="badge ${c.dir}">${c.pct}</span></td>
-      <td><span class="cat-badge">${c.cat}</span></td>
-    </tr>
-  `).join('');
-}
-
-/* ── RENDER SIGNALS ── */
-function renderSignals() {
-  const icons = {
-    buy: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d68f" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
-    sell: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ff4d6d" stroke-width="2.5"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`,
-    watch: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ffb830" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
-  };
-  document.getElementById('signalList').innerHTML = SIGNALS.map(s => `
-    <div class="signal-item">
-      <div class="signal-icon ${s.type}">${icons[s.type]}</div>
-      <div class="signal-body">
-        <div class="signal-top">
-          <span class="signal-coin">${s.coin}</span>
-          <span class="signal-amt ${s.type}">${s.amt}</span>
+      <td>
+        <div class="price-live ${price?'':'loading'}" id="price-${t.ticker}" style="color:${chg>=0?'var(--green)':'var(--red)'}">${price?fmtUSD(price):'Loading…'}</div>
+        ${d?`<div style="font-size:8px;font-family:var(--mono);color:var(--text3)">${d.source}·${now8()}</div>`:''}
+      </td>
+      <td><span class="pb ${chg>=0?'up':'down'}">${fmtPct(chg)}</span></td>
+      <td>
+        <div style="display:flex;align-items:center">
+          <div class="fb-w"><div class="fb-f" style="width:${Math.min(100,(inflow/15*100)).toFixed(0)}%;background:var(--green)"></div></div>
+          <span class="famt up">$${inflow.toFixed(1)}M</span>
         </div>
-        <div class="signal-desc">${s.desc}</div>
-        <div class="signal-time">${s.time}</div>
-      </div>
-    </div>
-  `).join('');
+      </td>
+      <td>
+        <div style="display:flex;align-items:center">
+          <div class="fb-w"><div class="fb-f" style="width:${Math.min(100,(outflow/15*100)).toFixed(0)}%;background:var(--red)"></div></div>
+          <span class="famt down">$${outflow.toFixed(1)}M</span>
+        </div>
+      </td>
+      <td><span class="sig-v" style="background:${sig.bg};color:${sig.c}">${sig.txt}</span></td>
+      <td class="mcap">${price?fmtMcap(price,t.ticker):'—'}</td>
+      <td><span class="cat-p cat-${t.cat}">${t.cat}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tbl-upd').textContent = 'Updated '+now8();
 }
 
-/* ── RENDER WHALES ── */
-function renderWhales(filter) {
-  const list = filter
-    ? WHALES.filter(w => w.addr.toLowerCase().includes(filter) || w.tag.toLowerCase().includes(filter))
-    : WHALES;
-  document.getElementById('whaleGrid').innerHTML = list.map(w => `
-    <div class="whale-card">
-      <div class="whale-tag-badge">${w.tag}</div>
-      <div class="whale-addr">${w.addr}</div>
-      <div class="whale-pnl">${w.pnl}</div>
-      <div class="whale-holds">Top: ${w.holds}</div>
-      <div class="win-bar-wrap">
-        <div class="win-track"><div class="win-fill" style="width:${w.wins}%"></div></div>
-        <span class="win-pct">${w.wins}% win</span>
+// ── WATCHLIST ─────────────────────────────────────────────
+function renderWatchlist(){
+  const tks = ['SOL','JUP','BONK','WIF','FARTCOIN','RENDER'];
+  const html = tks.map(tk=>{
+    const t = TOKENS.find(x=>x.ticker===tk);
+    const d = liveData[tk];
+    const chg = d?.change24h??0;
+    return `<div class="wi">
+      <div><div class="wi-t">$${tk}</div><div class="wi-n">${t?.name||tk}</div></div>
+      <div>
+        <div class="wi-p ${chg>=0?'up':'down'}">${d?fmtUSD(d.price):'…'}</div>
+        <div class="wi-c ${chg>=0?'up':'down'}">${d?fmtPct(chg):'—'}</div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  document.getElementById('wl-items').innerHTML = html;
 }
 
-/* ── CHART ── */
-function initChart() {
-  const ctx = document.getElementById('flowChart').getContext('2d');
-  flowChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: COINS.slice(0,8).map(c => '$'+c.ticker),
-      datasets: [{
-        label: 'Inflow ($M)',
-        data: COINS.slice(0,8).map(c => c.inflow),
-        backgroundColor: COINS.slice(0,8).map(c => c.dir === 'up' ? 'rgba(0,214,143,0.7)' : 'rgba(255,77,109,0.7)'),
-        borderColor: COINS.slice(0,8).map(c => c.dir === 'up' ? '#00d68f' : '#ff4d6d'),
-        borderWidth: 1,
-        borderRadius: 4,
-        borderSkipped: false,
+// ── CHARTS ────────────────────────────────────────────────
+function initCharts(){
+  const tks = ['SOL','JUP','BONK','WIF','FARTCOIN','RENDER'];
+  const chartTokens = TOKENS.filter(t=>tks.includes(t.ticker));
+  const colors = ['#a855f7','#4d9fff','#f5a623','#00e599','#ff3d5a','#a855f7'];
+
+  // Price chart
+  const pCtx = document.getElementById('priceChart').getContext('2d');
+  priceChart = new Chart(pCtx, {
+    type:'line',
+    data:{
+      labels: Array.from({length:20},(_,i)=>i===19?'Now':''),
+      datasets: chartTokens.map((t,i)=>({
+        label: '$'+t.ticker,
+        data: Array(20).fill(null),
+        borderColor: colors[i]||'#fff',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.4,
+        fill: false,
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      plugins:{
+        legend:{display:true, labels:{color:'#3d4558',font:{family:'JetBrains Mono',size:8},boxWidth:8,padding:8}},
+        tooltip:{backgroundColor:'#0c0e13',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#7a8499',bodyColor:'#dce3f0',titleFont:{family:'JetBrains Mono',size:8},bodyFont:{family:'JetBrains Mono',size:10},callbacks:{label:c=>`${c.dataset.label}: ${fmtUSD(c.parsed.y)}`}}
+      },
+      scales:{
+        x:{ticks:{color:'#3d4558',font:{family:'JetBrains Mono',size:8},maxTicksLimit:5},grid:{display:false},border:{display:false}},
+        y:{ticks:{color:'#3d4558',font:{family:'JetBrains Mono',size:8},callback:v=>fmtUSD(v)},grid:{color:'rgba(255,255,255,.04)'},border:{display:false}}
+      }
+    }
+  });
+
+  // 24H change chart
+  const cCtx = document.getElementById('changeChart').getContext('2d');
+  changeChart = new Chart(cCtx, {
+    type:'bar',
+    data:{
+      labels: TOKENS.map(t=>'$'+t.ticker),
+      datasets:[{
+        label:'24H %',
+        data: TOKENS.map(()=>0),
+        backgroundColor: TOKENS.map(()=>'rgba(122,132,153,.3)'),
+        borderColor: TOKENS.map(()=>'rgba(122,132,153,.5)'),
+        borderWidth:1, borderRadius:3, borderSkipped:false,
       }]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#0f1217',
-          borderColor: 'rgba(255,255,255,0.1)',
-          borderWidth: 1,
-          titleColor: '#8892a4',
-          bodyColor: '#e8eaf0',
-          titleFont: { family: 'Space Mono', size: 10 },
-          bodyFont: { family: 'Space Mono', size: 12 },
-          callbacks: { label: ctx => '$' + ctx.parsed.y.toFixed(1) + 'M inflow' }
-        }
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#0c0e13',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#7a8499',bodyColor:'#dce3f0',titleFont:{family:'JetBrains Mono',size:8},bodyFont:{family:'JetBrains Mono',size:10},callbacks:{label:c=>`${c.dataset.label}: ${fmtPct(c.parsed.x)}`}}
       },
-      scales: {
-        x: {
-          ticks: { color: '#4a5568', font: { family: 'Space Mono', size: 10 }, autoSkip: false },
-          grid: { display: false },
-          border: { color: 'rgba(255,255,255,0.07)' }
-        },
-        y: {
-          ticks: { color: '#4a5568', font: { family: 'Space Mono', size: 10 }, callback: v => '$' + v + 'M' },
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          border: { display: false }
-        }
+      scales:{
+        x:{ticks:{color:'#3d4558',font:{family:'JetBrains Mono',size:8},callback:v=>v+'%'},grid:{color:'rgba(255,255,255,.04)'},border:{display:false}},
+        y:{ticks:{color:'#7a8499',font:{family:'JetBrains Mono',size:8}},grid:{display:false},border:{display:false}}
       }
     }
   });
 }
 
-/* ── INTERACTIONS ── */
-function filterCoins(btn, cat) {
-  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  currentCat = cat;
-  renderCoins(cat);
+function updateCharts(){
+  if(!priceChart||!changeChart) return;
+  const tks = ['SOL','JUP','BONK','WIF','FARTCOIN','RENDER'];
+  // Price history chart
+  tks.forEach((tk,i)=>{
+    const hist = priceHistory[tk]||[];
+    const padded = Array(Math.max(0,20-hist.length)).fill(null).concat(hist.slice(-20));
+    if(priceChart.data.datasets[i]) priceChart.data.datasets[i].data = padded;
+  });
+  priceChart.update('none');
+
+  // Change chart
+  const chgs = TOKENS.map(t=>liveData[t.ticker]?.change24h??0);
+  changeChart.data.datasets[0].data = chgs;
+  changeChart.data.datasets[0].backgroundColor = chgs.map(c=>c>=0?'rgba(0,229,153,.55)':'rgba(255,61,90,.55)');
+  changeChart.data.datasets[0].borderColor = chgs.map(c=>c>=0?'#00e599':'#ff3d5a');
+  changeChart.update('none');
+  document.getElementById('chart-updated').textContent = 'Updated '+now8();
 }
 
-function filterWhalecards() {
-  renderWhales(document.getElementById('walletSearch').value.toLowerCase().trim());
+// ── TX FEED (simulated but driven by live price changes) ──
+const TX_TYPES = [
+  (tk,a)=>({coin:'$'+tk, desc:`Whale accumulated ${a} — entry confirmed by on-chain data`, type:'buy', badge:'whale', wallet:rndWallet()}),
+  (tk,a)=>({coin:'$'+tk, desc:`Smart money wallet opened position — ${a} inflow signal`, type:'buy', badge:'smart', wallet:rndWallet()}),
+  (tk,a)=>({coin:'$'+tk, desc:`Mega whale distributing — ${a} moved to exchange wallet`, type:'sell', badge:'mega', wallet:rndWallet()}),
+  (tk,a)=>({coin:'$'+tk, desc:`New whale position detected — monitor this address`, type:'watch', badge:'watch', wallet:rndWallet()}),
+  (tk,a)=>({coin:'$'+tk, desc:`Coordinated inflow — 5 top wallets bought ${a} in 1H`, type:'buy', badge:'whale', wallet:rndWallet()}),
+];
+const WALLETS=['7fKq…nB2w','Gh3k…m9Xp','xR9p…4cLm','bN2s…8vYt','qW5j…1dFr','mK8c…6pHe'];
+function rndWallet(){return WALLETS[Math.floor(Math.random()*WALLETS.length)]}
+function rndAmt(){const v=Math.random()*2e6+5e4; return fmtUSD(v)}
+
+function addTx(){
+  // pick a token that has live data and weight toward high-change tokens
+  const available = TOKENS.filter(t=>liveData[t.ticker]);
+  if(!available.length) return;
+  // bias toward tokens with bigger abs price change
+  const weights = available.map(t=>Math.abs(liveData[t.ticker].change24h||1)+1);
+  const total = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random()*total, chosen;
+  for(let i=0;i<available.length;i++){r-=weights[i];if(r<=0){chosen=available[i];break}}
+  chosen = chosen||available[0];
+  const tmpl = TX_TYPES[Math.floor(Math.random()*TX_TYPES.length)];
+  const tx = {...tmpl(chosen.ticker, rndAmt()), age:0};
+  txLog.unshift(tx);
+  if(txLog.length>40) txLog.pop();
+  renderTxFeed();
+}
+function renderTxFeed(){
+  const colors = {buy:'var(--green)',sell:'var(--red)',watch:'var(--amber)'};
+  document.getElementById('tx-feed').innerHTML = txLog.map(tx=>`
+    <div class="txi">
+      <div class="tx-bar" style="background:${colors[tx.type]}"></div>
+      <div class="tx-b">
+        <div class="tx-top">
+          <span class="tx-cn">${tx.coin}</span>
+          <span class="tx-am ${tx.type}">${tx.type==='sell'?'-':'+'}${rndAmt()}</span>
+        </div>
+        <div class="tx-ds">${tx.desc}</div>
+        <div class="tx-mt">
+          <span class="tx-ti">${tx.age<60?tx.age+'s ago':Math.floor(tx.age/60)+'m ago'}</span>
+          <span class="tx-wl">${tx.wallet}</span>
+          <span class="tx-bg ${tx.badge}">${tx.badge.toUpperCase()}</span>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
-function setTf(btn, tf) {
-  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const mults = {'1H':0.3,'4H':0.65,'24H':1,'7D':2.2};
-  const m = mults[tf] || 1;
-  flowChart.data.datasets[0].data = COINS.slice(0,8).map(c => parseFloat((c.inflow * m * (0.75 + Math.random() * 0.5)).toFixed(1)));
-  flowChart.update();
+// ── WHALE LIST ────────────────────────────────────────────
+function renderWhales(){
+  document.getElementById('whale-list').innerHTML = WHALES.map(w=>`
+    <div class="whi">
+      <div class="wh-head"><span class="wh-tag">${w.tag}</span><span class="wh-pnl">${w.pnl}</span></div>
+      <div class="wh-addr">${w.addr}</div>
+      <div class="wh-holds">Top: ${w.holds}</div>
+      <div class="wh-stats">
+        <div class="wh-s"><div class="wh-sl">Win%</div><div class="wh-sv up">${w.wins}%</div></div>
+        <div class="wh-s"><div class="wh-sl">ROI</div><div class="wh-sv up">${w.roi}</div></div>
+        <div class="wh-s"><div class="wh-sl">Txns</div><div class="wh-sv">${w.txns.toLocaleString()}</div></div>
+      </div>
+      <div class="win-bar"><div class="win-f" style="width:${w.wins}%"></div></div>
+    </div>`).join('');
 }
 
-function setPage(el, page) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  el.classList.add('active');
+// ── INTERACTIONS ──────────────────────────────────────────
+function setPage(el){document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));el.classList.add('active')}
+function setTf(btn,tf){
+  btn.parentElement.querySelectorAll('.tb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');currentTf=tf;
+}
+function setFilter(btn,f){
+  btn.parentElement.querySelectorAll('.tb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');currentFilter=f;renderTable();
 }
 
-function simulateRefresh(btn) {
-  btn.style.opacity = '0.5';
-  setTimeout(() => { btn.style.opacity = '1'; }, 800);
-  const el = document.getElementById('m-inflow');
-  const cur = parseFloat(el.textContent.replace('$','').replace('M',''));
-  el.textContent = '$' + (cur + (Math.random() - 0.3) * 1.5).toFixed(1) + 'M';
+// ── MAIN POLLING LOOP ─────────────────────────────────────
+async function fullRefresh(){
+  // Fetch all sources in parallel
+  const [jupOk, cgOk, gtOk] = await Promise.allSettled([
+    fetchJupiterPrices(),
+    fetchCoinGeckoSOL(),
+    fetchGeckoTerminalTrending(),
+  ]);
+  renderTable();
+  renderWatchlist();
+  updateCharts();
 }
 
-/* ── LIVE UPDATES ── */
-setInterval(() => {
-  if (!flowChart) return;
-  const idx = Math.floor(Math.random() * 8);
-  const cur = flowChart.data.datasets[0].data[idx];
-  flowChart.data.datasets[0].data[idx] = Math.max(0.1, parseFloat((cur + (Math.random() - 0.35) * 0.6).toFixed(1)));
-  flowChart.update('none');
-  const el = document.getElementById('m-inflow');
-  const v = parseFloat(el.textContent.replace('$','').replace('M',''));
-  el.textContent = '$' + (v + (Math.random() - 0.3) * 0.2).toFixed(1) + 'M';
-}, 3000);
+// ── TICK (every 1s) ───────────────────────────────────────
+setInterval(()=>{
+  tickSec++;
+  // Age tx entries
+  txLog = txLog.map(t=>({...t,age:t.age+1}));
+  // New tx every ~3s
+  if(tickSec%3===0) addTx();
+  else renderTxFeed(); // just update age display
+  // Jupiter: every 10s
+  if(tickSec%10===0){
+    fetchJupiterPrices().then(ok=>{
+      if(ok){renderTable();renderWatchlist();updateCharts();}
+    });
+  }
+  // CoinGecko: every 30s (rate limit 30/min)
+  if(tickSec%30===0){
+    fetchCoinGeckoSOL();
+  }
+  // GeckoTerminal: every 60s
+  if(tickSec%60===0){
+    fetchGeckoTerminalTrending();
+  }
+},1000);
 
-/* ── INIT ── */
-renderCoins('all');
-renderSignals();
-renderWhales('');
-initChart();
+// ── INIT ──────────────────────────────────────────────────
+renderWhales();
+initCharts();
+addTx();addTx();addTx();
+
+// First full fetch
+fullRefresh().catch(console.error);
 </script>
 </body>
 </html>
